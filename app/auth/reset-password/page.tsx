@@ -12,15 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 
-const resetPasswordSchema = z.object({
-    newPassword: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string().min(1, "Confirm Password is required")
-}).refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-});
-
-type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
+import { resetPasswordSchema, ResetPasswordFormValues } from '@/lib/validations/auth';
 
 function ResetPasswordForm() {
     const [isLoading, setIsLoading] = useState(false);

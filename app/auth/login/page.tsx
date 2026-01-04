@@ -9,15 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { toast } from 'sonner';
 
-const loginSchema = z.object({
-    email: z.string().min(1, "Email is required").email("Invalid email address"),
-    password: z.string().min(1, "Password is required"),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
+import { loginSchema, LoginFormValues } from '@/lib/validations/auth';
 
 export default function LoginPage() {
     const { login } = useAuth();

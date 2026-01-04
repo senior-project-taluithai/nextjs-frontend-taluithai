@@ -8,7 +8,8 @@ import {
   Map,
   MapPin,
   Sparkles,
-  UserPlus
+  UserPlus,
+  Settings,
 } from "lucide-react"
 
 import {
@@ -29,6 +30,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -184,6 +187,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg" align="end" sideOffset={4}>
+                  <DropdownMenuItem asChild>
+                    <a href="/profile" className="cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Profile Settings</span>
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
