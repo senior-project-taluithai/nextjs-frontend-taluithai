@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
 const forgotPasswordSchema = z.object({
     email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -18,8 +19,6 @@ const forgotPasswordSchema = z.object({
 type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPasswordPage() {
-    const [message, setMessage] = useState('');
-    const [serverError, setServerError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const {
@@ -35,13 +34,11 @@ export default function ForgotPasswordPage() {
 
     const onSubmit = async (data: ForgotPasswordFormValues) => {
         setIsLoading(true);
-        setServerError('');
-        setMessage('');
         try {
             await authService.forgotPassword({ email: data.email });
-            setMessage('If an account exists with this email, you will receive a password reset link.');
+            toast.success('If an account exists with this email, you will receive a password reset link.');
         } catch (err: any) {
-            setServerError('An error occurred. Please try again.');
+            toast.error('An error occurred. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -56,8 +53,6 @@ export default function ForgotPasswordPage() {
                 </CardHeader>
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <CardContent className="space-y-4">
-                        {message && <div className="text-green-600 text-sm">{message}</div>}
-                        {serverError && <div className="text-red-500 text-sm">{serverError}</div>}
 
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>

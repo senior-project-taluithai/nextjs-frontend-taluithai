@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
 const resetPasswordSchema = z.object({
     newPassword: z.string().min(6, "Password must be at least 6 characters"),
@@ -22,8 +23,6 @@ const resetPasswordSchema = z.object({
 type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
 function ResetPasswordForm() {
-    const [message, setMessage] = useState('');
-    const [serverError, setServerError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -43,21 +42,19 @@ function ResetPasswordForm() {
 
     const onSubmit = async (data: ResetPasswordFormValues) => {
         if (!token) {
-            setServerError('Invalid token');
+            toast.error('Invalid token');
             return;
         }
 
         setIsLoading(true);
-        setServerError('');
-        setMessage('');
         try {
             await authService.resetPassword({ token, newPassword: data.newPassword });
-            setMessage('Password reset successfully. Redirecting to login...');
+            toast.success('Password reset successfully. Redirecting to login...');
             setTimeout(() => {
                 router.push('/auth/login');
             }, 2000);
         } catch (err: any) {
-            setServerError('Failed to reset password. The link may be expired.');
+            toast.error('Failed to reset password. The link may be expired.');
         } finally {
             setIsLoading(false);
         }
@@ -82,8 +79,6 @@ function ResetPasswordForm() {
             </CardHeader>
             <form onSubmit={handleSubmit(onSubmit)}>
                 <CardContent className="space-y-4">
-                    {message && <div className="text-green-600 text-sm">{message}</div>}
-                    {serverError && <div className="text-red-500 text-sm">{serverError}</div>}
 
                     <div className="space-y-2">
                         <Label htmlFor="newPassword">New Password</Label>

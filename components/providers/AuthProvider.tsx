@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(response.user);
             router.push('/');
         } catch (error) {
-            console.error("Login failed", error);
+            // Error is handled by the caller (UI displays toast)
             throw error;
         }
     };
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(response.user);
             router.push('/');
         } catch (error) {
-            console.error("Registration failed", error);
+            // Error is handled by the caller (UI displays toast)
             throw error;
         }
     };

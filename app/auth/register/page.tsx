@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
 const registerSchema = z.object({
     firstName: z.string().min(1, "First name is required"),
@@ -26,7 +27,6 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
     const { register } = useAuth();
-    const [serverError, setServerError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const {
@@ -46,13 +46,14 @@ export default function RegisterPage() {
 
     const onSubmit = async (data: RegisterFormValues) => {
         setIsLoading(true);
-        setServerError('');
         try {
             // Exclude confirmPassword from the API call
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { confirmPassword, ...registerData } = data;
             await register(registerData);
+            toast.success('Account created successfully!');
         } catch (err: any) {
-            setServerError(err.response?.data?.message || 'Registration failed');
+            toast.error(err.response?.data?.message || 'Registration failed');
         } finally {
             setIsLoading(false);
         }
@@ -67,7 +68,6 @@ export default function RegisterPage() {
                 </CardHeader>
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <CardContent className="space-y-4">
-                        {serverError && <div className="text-red-500 text-sm font-medium">{serverError}</div>}
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">

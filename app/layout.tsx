@@ -4,6 +4,7 @@ import "./globals.css"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AuthProvider } from "@/components/providers/AuthProvider"
+import { Toaster } from "@/components/ui/sonner"
 
 
 const geistSans = Geist({
@@ -43,6 +44,7 @@ export default function RootLayout({
                 {children}
               </div>
             </main>
+            <Toaster position="top-center"/>
           </SidebarProvider>
         </AuthProvider>
       </body>

@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
 const loginSchema = z.object({
     email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -20,7 +21,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
     const { login } = useAuth();
-    const [serverError, setServerError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const {
@@ -37,11 +37,11 @@ export default function LoginPage() {
 
     const onSubmit = async (data: LoginFormValues) => {
         setIsLoading(true);
-        setServerError('');
         try {
             await login(data);
+            toast.success('Logged in successfully');
         } catch (err: any) {
-            setServerError(err.response?.data?.message || 'Invalid email or password');
+            toast.error(err.response?.data?.message || 'Invalid email or password');
         } finally {
             setIsLoading(false);
         }
@@ -56,8 +56,6 @@ export default function LoginPage() {
                 </CardHeader>
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <CardContent className="space-y-4">
-                        {serverError && <div className="text-red-500 text-sm font-medium">{serverError}</div>}
-
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
                             <Input
