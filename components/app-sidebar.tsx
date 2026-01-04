@@ -10,14 +10,6 @@ import {
   Sparkles,
   UserPlus
 } from "lucide-react"
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-  useUser
-} from "@clerk/nextjs"
 
 import {
   Sidebar,
@@ -33,8 +25,21 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar"
+import { useAuth } from "@/components/providers/AuthProvider"
 
 // Mock data for navigation only (user data removed)
+
 const data = {
   mainNav: [
     {
@@ -64,7 +69,8 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isMounted, setIsMounted] = React.useState(false)
-  const { user } = useUser();
+  const { user, logout } = useAuth();
+
 
   React.useEffect(() => {
     setIsMounted(true)
@@ -146,48 +152,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarFooter>
         <SidebarMenu>
-          <SignedIn>
+          {user ? (
             <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground w-full justify-center p-0 overflow-hidden"
-              >
-                  <UserButton
-                    showName={true}
-                    appearance={{
-                      elements: {
-                        rootBox: "flex w-full overflow-hidden",
-                        userButtonBox: "flex flex-row items-center w-full gap-2",
-                        userButtonTrigger: "w-full justify-start focus:shadow-none",
-                        userButtonAvatarBox: "size-8 shrink-0",
-                        userButtonOuterIdentifier: "text-sm font-medium truncate text-left group-data-[collapsible=icon]:hidden",
-                        userButtonPopoverCard: "ml-12"
-                      }
-                    }}
-                  />
-              </SidebarMenuButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground w-full justify-center p-0 overflow-hidden"
+                  >
+                    <div className="flex w-full items-center gap-2">
+                      <Avatar className="h-8 w-8 rounded-lg">
+                        <AvatarImage src={user.avatarUrl} alt={user.firstName} />
+                        <AvatarFallback className="rounded-lg">{user.firstName?.charAt(0) || user.email.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                        <span className="truncate font-semibold">{user.firstName} {user.lastName}</span>
+                        <span className="truncate text-xs">{user.email}</span>
+                      </div>
+                    </div>
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg" align="end" sideOffset={4}>
+                  <DropdownMenuItem onClick={() => logout()}>
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </SidebarMenuItem>
-          </SignedIn>
-          <SignedOut>
-            <SidebarMenuItem>
-              <SignInButton mode="modal">
-                <SidebarMenuButton tooltip="Log In">
-                  <LogIn className="size-4" />
-                  <span>Log In</span>
+          ) : (
+            <>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Log In" asChild>
+                  <a href="/auth/login">
+                    <LogIn className="size-4" />
+                    <span>Log In</span>
+                  </a>
                 </SidebarMenuButton>
-              </SignInButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SignUpButton mode="modal">
-                <SidebarMenuButton tooltip="Register" className="text-primary hover:text-primary">
-                  <UserPlus className="size-4" />
-                  <span>Register</span>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Register" className="text-primary hover:text-primary" asChild>
+                  <a href="/auth/register">
+                    <UserPlus className="size-4" />
+                    <span>Register</span>
+                  </a>
                 </SidebarMenuButton>
-              </SignUpButton>
-            </SidebarMenuItem>
-          </SignedOut>
+              </SidebarMenuItem>
+            </>
+          )}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   )
 }
+

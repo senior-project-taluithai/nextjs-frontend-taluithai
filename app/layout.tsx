@@ -3,14 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
-import {
-  ClerkProvider,
-  SignInButton,
-  SignUpButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from '@clerk/nextjs'
+import { AuthProvider } from "@/components/providers/AuthProvider"
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,14 +27,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        >
+
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <AuthProvider>
           <SidebarProvider>
             <AppSidebar />
-            <main className="w-full relative">
+            <main className="w-full relative ">
               <div className="md:hidden p-4">
                 <SidebarTrigger />
               </div>
@@ -49,8 +44,9 @@ export default function RootLayout({
               </div>
             </main>
           </SidebarProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </AuthProvider>
+      </body>
+    </html>
+
   );
 }
