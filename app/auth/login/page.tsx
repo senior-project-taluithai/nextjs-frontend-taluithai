@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from 'react';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,9 +12,13 @@ import { toast } from 'sonner';
 
 import { loginSchema, LoginFormValues } from '@/lib/validations/auth';
 
+import { useLoginMutation } from '@/hooks/api/useAuth';
+import { useRouter } from 'next/navigation';
+
 export default function LoginPage() {
-    const { login } = useAuth();
-    const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
+    const loginMutation = useLoginMutation();
+    const isLoading = loginMutation.isPending;
 
     const {
         register: formRegister,
@@ -30,14 +33,12 @@ export default function LoginPage() {
     });
 
     const onSubmit = async (data: LoginFormValues) => {
-        setIsLoading(true);
         try {
-            await login(data);
+            await loginMutation.mutateAsync(data);
             toast.success('Logged in successfully');
+            router.push('/');
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Invalid email or password');
-        } finally {
-            setIsLoading(false);
         }
     };
 

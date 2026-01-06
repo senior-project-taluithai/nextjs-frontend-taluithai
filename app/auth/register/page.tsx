@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from 'react';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,9 +13,13 @@ import { toast } from 'sonner';
 
 import { registerSchema, RegisterFormValues } from '@/lib/validations/auth';
 
+import { useRegisterMutation } from '@/hooks/api/useAuth';
+import { useRouter } from 'next/navigation';
+
 export default function RegisterPage() {
-    const { register } = useAuth();
-    const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
+    const registerMutation = useRegisterMutation();
+    const isLoading = registerMutation.isPending;
 
     const {
         register: formRegister,
@@ -34,17 +37,15 @@ export default function RegisterPage() {
     });
 
     const onSubmit = async (data: RegisterFormValues) => {
-        setIsLoading(true);
         try {
             // Exclude confirmPassword from the API call
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { confirmPassword, ...registerData } = data;
-            await register(registerData);
+            await registerMutation.mutateAsync(registerData);
             toast.success('Account created successfully!');
+            router.push('/');
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Registration failed');
-        } finally {
-            setIsLoading(false);
         }
     };
 

@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AuthProvider } from "@/components/providers/AuthProvider"
 import { Toaster } from "@/components/ui/sonner"
+import QueryProvider from "@/components/providers/QueryProvider";
 
 
 const geistSans = Geist({
@@ -28,26 +29,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AuthProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <main className="w-full relative ">
-              <div className="md:hidden p-4">
-                <SidebarTrigger />
-              </div>
-              <div className="container mx-auto p-6 pt-0 md:pt-6">
-                {children}
-              </div>
-            </main>
-            <Toaster position="top-right"/>
-          </SidebarProvider>
-        </AuthProvider>
-      </body>
-    </html>
+    <QueryProvider>
+      <AuthProvider>
+        <html lang="en" suppressHydrationWarning>
+          <body
+            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          >
+            <SidebarProvider>
+              <AppSidebar />
+              <main className="w-full relative ">
+                <div className="md:hidden p-4">
+                  <SidebarTrigger />
+                </div>
+                <div className="container mx-auto p-6 pt-0 md:pt-6">
+                  {children}
+                </div>
+              </main>
+              <Toaster position="top-right" />
+            </SidebarProvider>
+          </body>
+        </html>
+      </AuthProvider>
+    </QueryProvider>
   );
 }

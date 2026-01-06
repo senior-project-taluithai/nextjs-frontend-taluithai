@@ -51,6 +51,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useAuth } from "@/components/providers/AuthProvider"
+import { useLogoutMutation } from "@/hooks/api/useAuth";
+import { useRouter } from "next/navigation";
 
 // Mock data for navigation only (user data removed)
 
@@ -83,7 +85,14 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isMounted, setIsMounted] = React.useState(false)
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const logoutMutation = useLogoutMutation();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await logoutMutation.mutateAsync();
+    router.push("/auth/login"); // Redirect after logout
+  }
 
 
   React.useEffect(() => {
@@ -209,7 +218,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => logout()}>Continue</AlertDialogAction>
+                        <AlertDialogAction onClick={handleLogout}>Continue</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>

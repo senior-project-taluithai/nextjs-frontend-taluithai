@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { authService, TravelPreference } from '@/lib/auth'; // Import authService and type
+import { useAllTravelPreferences, useUserPreferences, useUpdateUserPreferencesMutation } from '@/hooks/api/usePreferences';
+import { useChangePasswordMutation } from '@/hooks/api/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,8 +25,9 @@ import { changePasswordSchema, ChangePasswordFormValues } from '@/lib/validation
 import { toast } from 'sonner';
 
 function ChangePasswordDialog() {
-    const [isLoading, setIsLoading] = useState(false);
     const [open, setOpen] = useState(false);
+    const changePasswordMutation = useChangePasswordMutation();
+    const isLoading = changePasswordMutation.isPending;
 
     const {
         register,
@@ -42,9 +44,8 @@ function ChangePasswordDialog() {
     });
 
     const onSubmit = async (data: ChangePasswordFormValues) => {
-        setIsLoading(true);
         try {
-            await authService.changePassword({
+            await changePasswordMutation.mutateAsync({
                 oldPassword: data.currentPassword,
                 newPassword: data.newPassword,
             });
@@ -54,8 +55,6 @@ function ChangePasswordDialog() {
         } catch (err: any) {
             // Basic error handling - display message from backend if available
             toast.error(err.response?.data?.message || 'Failed to change password');
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -115,35 +114,21 @@ function ChangePasswordDialog() {
 
 export default function ProfilePage() {
     const { user } = useAuth();
-    const [allPreferences, setAllPreferences] = useState<TravelPreference[]>([]);
+
+    // Use React Query hooks
+    const { data: allPreferences = [], isLoading: loadingPreferences } = useAllTravelPreferences();
+    const { data: userPreferences = [], isLoading: loadingUserPreferences } = useUserPreferences();
+    const updatePreferencesMutation = useUpdateUserPreferencesMutation();
+
     const [selectedPreferenceIds, setSelectedPreferenceIds] = useState<string[]>([]);
-    const [loadingPreferences, setLoadingPreferences] = useState(true);
-    const [savingPreferences, setSavingPreferences] = useState(false);
     const MAX_SELECTION = 5;
 
-    // Fetch preferences on mount using authService
+    // Sync selected preferences with fetched data
     useEffect(() => {
-        const fetchPreferences = async () => {
-            try {
-                const [all, userPrefs] = await Promise.all([
-                    authService.getAllTravelPreferences(),
-                    authService.getUserPreferences()
-                ]);
-                setAllPreferences(all);
-                // Assuming userPrefs is an array of TravelPreference objects
-                setSelectedPreferenceIds(userPrefs.map(p => p.id));
-            } catch (error) {
-                console.error("Failed to fetch preferences", error);
-                toast.error("Failed to load preferences");
-            } finally {
-                setLoadingPreferences(false);
-            }
-        };
-
-        if (user) {
-            fetchPreferences();
+        if (userPreferences.length > 0) {
+            setSelectedPreferenceIds(userPreferences.map(p => p.id));
         }
-    }, [user]);
+    }, [userPreferences]);
 
     const togglePreference = (prefId: string) => {
         if (selectedPreferenceIds.includes(prefId)) {
@@ -158,16 +143,16 @@ export default function ProfilePage() {
     };
 
     const savePreferences = async () => {
-        setSavingPreferences(true);
         try {
-            await authService.updateUserPreferences({ preferenceIds: selectedPreferenceIds });
+            await updatePreferencesMutation.mutateAsync({ preferenceIds: selectedPreferenceIds });
             toast.success('Preferences saved successfully!');
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Failed to save preferences');
-        } finally {
-            setSavingPreferences(false);
         }
     }
+
+    const savingPreferences = updatePreferencesMutation.isPending;
+    const isLoading = loadingPreferences || loadingUserPreferences;
 
     if (!user) {
         return <div className="p-8">Please log in to view your profile.</div>
@@ -230,7 +215,7 @@ export default function ProfilePage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {loadingPreferences ? (
+                            {isLoading ? (
                                 <div>Loading preferences...</div>
                             ) : (
                                 <>
@@ -254,7 +239,7 @@ export default function ProfilePage() {
                             )}
                         </CardContent>
                         <CardFooter>
-                            <Button onClick={savePreferences} disabled={savingPreferences || loadingPreferences}>
+                            <Button onClick={savePreferences} disabled={savingPreferences || isLoading}>
                                 {savingPreferences ? 'Saving...' : 'Save Preferences'}
                             </Button>
                         </CardFooter>
