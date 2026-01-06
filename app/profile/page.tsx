@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { authService, TravelPreference } from '@/lib/auth'; // Import authService and type
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,14 +22,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { changePasswordSchema, ChangePasswordFormValues } from '@/lib/validations/auth';
 import { toast } from 'sonner';
-
-// Mock Travel Preferences
-const travelPreferencesList = [
-    "Beach", "Mountain", "City", "Historical", "Foodie",
-    "Adventure", "Relaxation", "Luxury", "Budget", "Family Friendly",
-    "Nightlife", "Nature", "Culture", "Shopping", "Road Trip",
-    "Camping", "Resort", "Solo Travel", "Cruises", "Ecotourism"
-];
 
 function ChangePasswordDialog() {
     const [isLoading, setIsLoading] = useState(false);
@@ -51,15 +44,16 @@ function ChangePasswordDialog() {
     const onSubmit = async (data: ChangePasswordFormValues) => {
         setIsLoading(true);
         try {
-            // In a real app, you'd call an API here.
-            // For now, we'll simulate a delay and success.
-            // await authService.changePassword(data);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await authService.changePassword({
+                oldPassword: data.currentPassword,
+                newPassword: data.newPassword,
+            });
             toast.success('Password changed successfully');
             setOpen(false);
             reset();
         } catch (err: any) {
-            toast.error('Failed to change password');
+            // Basic error handling - display message from backend if available
+            toast.error(err.response?.data?.message || 'Failed to change password');
         } finally {
             setIsLoading(false);
         }
@@ -121,15 +115,42 @@ function ChangePasswordDialog() {
 
 export default function ProfilePage() {
     const { user } = useAuth();
-    const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
+    const [allPreferences, setAllPreferences] = useState<TravelPreference[]>([]);
+    const [selectedPreferenceIds, setSelectedPreferenceIds] = useState<string[]>([]);
+    const [loadingPreferences, setLoadingPreferences] = useState(true);
+    const [savingPreferences, setSavingPreferences] = useState(false);
     const MAX_SELECTION = 5;
 
-    const togglePreference = (pref: string) => {
-        if (selectedPreferences.includes(pref)) {
-            setSelectedPreferences(selectedPreferences.filter(p => p !== pref));
+    // Fetch preferences on mount using authService
+    useEffect(() => {
+        const fetchPreferences = async () => {
+            try {
+                const [all, userPrefs] = await Promise.all([
+                    authService.getAllTravelPreferences(),
+                    authService.getUserPreferences()
+                ]);
+                setAllPreferences(all);
+                // Assuming userPrefs is an array of TravelPreference objects
+                setSelectedPreferenceIds(userPrefs.map(p => p.id));
+            } catch (error) {
+                console.error("Failed to fetch preferences", error);
+                toast.error("Failed to load preferences");
+            } finally {
+                setLoadingPreferences(false);
+            }
+        };
+
+        if (user) {
+            fetchPreferences();
+        }
+    }, [user]);
+
+    const togglePreference = (prefId: string) => {
+        if (selectedPreferenceIds.includes(prefId)) {
+            setSelectedPreferenceIds(selectedPreferenceIds.filter(id => id !== prefId));
         } else {
-            if (selectedPreferences.length < MAX_SELECTION) {
-                setSelectedPreferences([...selectedPreferences, pref]);
+            if (selectedPreferenceIds.length < MAX_SELECTION) {
+                setSelectedPreferenceIds([...selectedPreferenceIds, prefId]);
             } else {
                 toast.warning(`You can only select up to ${MAX_SELECTION} preferences.`);
             }
@@ -137,8 +158,15 @@ export default function ProfilePage() {
     };
 
     const savePreferences = async () => {
-        // Simulate API call
-        toast.success('Preferences saved successfully!');
+        setSavingPreferences(true);
+        try {
+            await authService.updateUserPreferences({ preferenceIds: selectedPreferenceIds });
+            toast.success('Preferences saved successfully!');
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to save preferences');
+        } finally {
+            setSavingPreferences(false);
+        }
     }
 
     if (!user) {
@@ -202,25 +230,32 @@ export default function ProfilePage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex flex-wrap gap-2 mb-6">
-                                {travelPreferencesList.map((pref) => (
-                                    <Badge
-                                        key={pref}
-                                        variant={selectedPreferences.includes(pref) ? "default" : "outline"}
-                                        className="cursor-pointer text-sm py-1 px-3 hover:bg-primary/90 hover:text-primary-foreground transition-colors"
-                                        onClick={() => togglePreference(pref)}
-                                    >
-                                        {pref}
-                                    </Badge>
-                                ))}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Selected: {selectedPreferences.length} / {MAX_SELECTION}
-                            </div>
+                            {loadingPreferences ? (
+                                <div>Loading preferences...</div>
+                            ) : (
+                                <>
+                                    <div className="flex flex-wrap gap-2 mb-6">
+                                        {allPreferences.map((pref) => (
+                                            <Badge
+                                                key={pref.id}
+                                                variant={selectedPreferenceIds.includes(pref.id) ? "default" : "outline"}
+                                                className="cursor-pointer text-sm py-1 px-3 hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+                                                onClick={() => togglePreference(pref.id)}
+                                            >
+                                                {pref.name}
+                                            </Badge>
+                                        ))}
+                                        {allPreferences.length === 0 && <p className="text-muted-foreground">No preferences available.</p>}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Selected: {selectedPreferenceIds.length} / {MAX_SELECTION}
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                         <CardFooter>
-                            <Button onClick={savePreferences} disabled={selectedPreferences.length === 0}>
-                                Save Preferences
+                            <Button onClick={savePreferences} disabled={savingPreferences || loadingPreferences}>
+                                {savingPreferences ? 'Saving...' : 'Save Preferences'}
                             </Button>
                         </CardFooter>
                     </Card>

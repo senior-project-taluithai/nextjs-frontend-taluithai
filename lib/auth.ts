@@ -23,6 +23,20 @@ export interface ResetPasswordDto {
   newPassword: string;
 }
 
+export interface ChangePasswordDto {
+  oldPassword?: string;
+  newPassword: string;
+}
+
+export interface TravelPreference {
+  id: string; // Assuming UUID or similar
+  name: string;
+}
+
+export interface UpdateUserPreferencesDto {
+  preferenceIds: string[];
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -78,6 +92,25 @@ export const authService = {
 
   resetPassword: async (data: ResetPasswordDto): Promise<void> => {
     await api.post('/auth/reset-password', data);
+  },
+
+  changePassword: async (data: ChangePasswordDto): Promise<void> => {
+      await api.post('/auth/change-password', data);
+  },
+
+  getAllTravelPreferences: async (): Promise<TravelPreference[]> => {
+      const response = await api.get<TravelPreference[]>('/travel-preferences');
+      return response.data;
+  },
+
+  getUserPreferences: async (): Promise<TravelPreference[]> => {
+      const response = await api.get<TravelPreference[]>('/users/me/preferences');
+      return response.data;
+  },
+
+  updateUserPreferences: async (data: UpdateUserPreferencesDto): Promise<TravelPreference[]> => {
+      const response = await api.post<TravelPreference[]>('/users/me/preferences', data);
+      return response.data;
   },
   
   // Note: simpler check not possible with httpOnly cookies without making a request.
