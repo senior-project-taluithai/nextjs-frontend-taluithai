@@ -1,54 +1,31 @@
+
 import axios from 'axios';
+import {
+    RegisterDto,
+    LoginDto,
+    ForgotPasswordDto,
+    ResetPasswordDto,
+    ChangePasswordDto,
+    AuthResponse
+} from './dtos/auth.dto';
+import {
+    UserProfile,
+    TravelPreference,
+    UpdateUserPreferencesDto
+} from './dtos/user.dto';
 
-// --- DTOs ---
-
-export interface RegisterDto {
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-export interface LoginDto {
-  email: string;
-  password: string;
-}
-
-export interface ForgotPasswordDto {
-  email: string;
-}
-
-export interface ResetPasswordDto {
-  token: string;
-  newPassword: string;
-}
-
-export interface ChangePasswordDto {
-  oldPassword?: string;
-  newPassword: string;
-}
-
-export interface TravelPreference {
-  id: string; // Assuming UUID or similar
-  name: string;
-}
-
-export interface UpdateUserPreferencesDto {
-  preferenceIds: string[];
-}
-
-export interface UserProfile {
-  id: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  avatarUrl?: string;
-}
-
-export interface AuthResponse {
-  accessToken: string;
-  user: UserProfile;
-}
+// Re-export for compatibility
+export type {
+    RegisterDto,
+    LoginDto,
+    ForgotPasswordDto,
+    ResetPasswordDto,
+    ChangePasswordDto,
+    AuthResponse,
+    UserProfile,
+    TravelPreference,
+    UpdateUserPreferencesDto
+};
 
 // --- API Service ---
 

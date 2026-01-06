@@ -44,7 +44,7 @@ export default function RootLayout({
                 {children}
               </div>
             </main>
-            <Toaster position="top-center"/>
+            <Toaster position="top-right"/>
           </SidebarProvider>
         </AuthProvider>
       </body>
