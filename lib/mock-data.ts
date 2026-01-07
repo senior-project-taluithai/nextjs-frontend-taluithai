@@ -70,7 +70,7 @@ export const provinces: Province[] = [
     region_name: "North",
     latitude: 18.7932,
     longitude: 99.1539,
-    image_url: "https://images.unsplash.com/photo-1549480017-d76466a4b7e8?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=1",
   },
   {
     province_id: 2,
@@ -79,7 +79,7 @@ export const provinces: Province[] = [
     region_name: "South",
     latitude: 7.8549,
     longitude: 98.2435,
-    image_url: "https://images.unsplash.com/photo-1579543161678-0fa19d8540c4?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=2",
   },
   {
     province_id: 3,
@@ -88,7 +88,7 @@ export const provinces: Province[] = [
     region_name: "Central",
     latitude: 13.7842,
     longitude: 100.5696,
-    image_url: "https://images.unsplash.com/photo-1627448868661-8cfdb396821d?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=3",
   },
   {
     province_id: 4,
@@ -97,7 +97,7 @@ export const provinces: Province[] = [
     region_name: "South",
     latitude: 9.1760,
     longitude: 99.1672,
-    image_url: "https://images.unsplash.com/photo-1552393351-4e76c2438814?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=4",
   },
   {
     province_id: 5,
@@ -106,7 +106,7 @@ export const provinces: Province[] = [
     region_name: "South",
     latitude: 8.0463,
     longitude: 98.7909,
-    image_url: "https://images.unsplash.com/photo-1473484210082-965306ec46a2?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=5",
   },
   {
     province_id: 6,
@@ -115,7 +115,7 @@ export const provinces: Province[] = [
     region_name: "East",
     latitude: 13.3619,
     longitude: 100.9850,
-    image_url: "https://images.unsplash.com/photo-1595180425666-9c4c449c2830?auto=format&fit=crop&q=80&w=1000",
+    image_url: "https://picsum.photos/1000/600?random=6",
   }
 ];
 
@@ -134,10 +134,11 @@ export const places: Place[] = [
     best_season: "winter",
     tags: ["Culture", "Temple", "Viewpoint"],
     rating: 4.8,
-    thumbnail_url: "https://images.unsplash.com/photo-1597405423856-7824888d3e26?auto=format&fit=crop&q=80&w=800",
+    thumbnail_url: "https://picsum.photos/800/600?random=10",
     image_urls: [
-      "https://images.unsplash.com/photo-1597405423856-7824888d3e26?auto=format&fit=crop&q=80&w=800",
-      "https://images.unsplash.com/photo-1587397750796-0f374786dca3?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=10",
+      "https://picsum.photos/800/600?random=11",
+      "https://picsum.photos/800/600?random=12"
     ],
     reviews: [
         { 
@@ -146,7 +147,7 @@ export const places: Place[] = [
             rating: 5, 
             comment: "Absolutely breathtaking! The view from the top is worth every step. Make sure to go early to avoid the crowds.", 
             date: "2024-01-15",
-            avatar_url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150"
+            avatar_url: "https://picsum.photos/150/150?random=101"
         },
         { 
             review_id: 2, 
@@ -154,14 +155,15 @@ export const places: Place[] = [
             rating: 4, 
             comment: "Beautiful temple. The architecture is stunning. A bit difficult to find parking though.", 
             date: "2024-02-10",
-            avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150"
+            avatar_url: "https://picsum.photos/150/150?random=102"
         },
         {
             review_id: 3,
             user_name: "Emily Davis",
             rating: 5,
             comment: "A must-visit in Chiang Mai! I felt so peaceful here.",
-            date: "2024-02-25"
+            date: "2024-02-25",
+            avatar_url: "https://picsum.photos/150/150?random=103"
         }
     ]
   },
@@ -179,9 +181,10 @@ export const places: Place[] = [
     best_season: "summer",
     tags: ["Beach", "Nightlife", "Water Sports"],
     rating: 4.5,
-    thumbnail_url: "https://images.unsplash.com/photo-1563294406-8dce28266453?auto=format&fit=crop&q=80&w=800",
+    thumbnail_url: "https://picsum.photos/800/600?random=20",
     image_urls: [
-      "https://images.unsplash.com/photo-1563294406-8dce28266453?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=20",
+      "https://picsum.photos/800/600?random=21"
     ],
     reviews: []
   },
@@ -199,9 +202,10 @@ export const places: Place[] = [
     best_season: "all_year",
     tags: ["History", "Architecture", "Culture"],
     rating: 4.9,
-    thumbnail_url: "https://images.unsplash.com/photo-1510250953686-21ce2c744f4e?auto=format&fit=crop&q=80&w=800",
+    thumbnail_url: "https://picsum.photos/800/600?random=30",
     image_urls: [
-      "https://images.unsplash.com/photo-1510250953686-21ce2c744f4e?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=30",
+      "https://picsum.photos/800/600?random=31"
     ],
     reviews: []
   },
@@ -219,9 +223,10 @@ export const places: Place[] = [
     best_season: "rainy",
     tags: ["Nature", "Adventure", "Lake"],
     rating: 4.7,
-    thumbnail_url: "https://images.unsplash.com/photo-1598267252277-3e1db6f80a40?auto=format&fit=crop&q=80&w=800",
+    thumbnail_url: "https://picsum.photos/800/600?random=40",
     image_urls: [
-      "https://images.unsplash.com/photo-1598267252277-3e1db6f80a40?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=40",
+      "https://picsum.photos/800/600?random=41"
     ],
     reviews: []
   },
@@ -239,9 +244,10 @@ export const places: Place[] = [
     best_season: "summer",
     tags: ["Beach", "Climbing", "Relax"],
     rating: 4.8,
-    thumbnail_url: "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800",
+    thumbnail_url: "https://picsum.photos/800/600?random=50",
     image_urls: [
-      "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=50",
+      "https://picsum.photos/800/600?random=51"
     ],
     reviews: []
   }
@@ -259,15 +265,15 @@ export const events: Event[] = [
     is_recurring: true,
     is_highlight: true,
     tags: ["Culture", "Lanterns", "Night"],
-    image_url: "https://images.unsplash.com/photo-1510250953686-21ce2c744f4e?auto=format&fit=crop&q=80&w=800", // Placeholder if specific one not found
+    image_url: "https://picsum.photos/800/600?random=60", 
     image_urls: [
-      "https://images.unsplash.com/photo-1510250953686-21ce2c744f4e?auto=format&fit=crop&q=80&w=800",
-      "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?auto=format&fit=crop&q=80&w=800"
+      "https://picsum.photos/800/600?random=60",
+      "https://picsum.photos/800/600?random=61"
     ],
     description: "เทศกาลปล่อยโคมลอยยี่เป็งอันสวยงามตระการตา",
     rating: 4.9,
     reviews: [
-        { review_id: 101, user_name: "Tourist A", rating: 5, comment: "Magical experience!", date: "2023-11-15" }
+        { review_id: 101, user_name: "Tourist A", rating: 5, comment: "Magical experience!", date: "2023-11-15", avatar_url: "https://picsum.photos/150/150?random=201" }
     ]
   },
   {
@@ -281,10 +287,10 @@ export const events: Event[] = [
     is_recurring: true,
     is_highlight: true,
     tags: ["Fun", "Water", "Tradition"],
-    image_url: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?auto=format&fit=crop&q=80&w=800",
+    image_url: "https://picsum.photos/800/600?random=70",
     image_urls: [
-       "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?auto=format&fit=crop&q=80&w=800",
-       "https://images.unsplash.com/photo-1510250953686-21ce2c744f4e?auto=format&fit=crop&q=80&w=800"
+       "https://picsum.photos/800/600?random=70",
+       "https://picsum.photos/800/600?random=71"
     ],
     description: "วันขึ้นปีใหม่ไทยและการเล่นน้ำสงกรานต์ที่สนุกสนาน",
     rating: 4.8,
