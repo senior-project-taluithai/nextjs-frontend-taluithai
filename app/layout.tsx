@@ -41,7 +41,9 @@ export default function RootLayout({
                 <div className="md:hidden p-4">
                   <SidebarTrigger />
                 </div>
-                <div className="container mx-auto p-6 pt-0 md:pt-6">
+                {/* For magin all main content */}
+                {/* <div className="container mx-auto p-6 pt-0 md:pt-6"> */}
+                  <div className="container mx-auto overflow-hidden">
                   {children}
                 </div>
               </main>
