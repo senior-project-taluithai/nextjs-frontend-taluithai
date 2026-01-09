@@ -1,0 +1,105 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Place, Event, provinces } from "@/lib/mock-data";
+import { Calendar, MapPin, Star } from "lucide-react";
+
+interface ExploreCardProps {
+    item: Place | Event;
+    type: "place" | "event";
+}
+
+export function ExploreCard({ item, type }: ExploreCardProps) {
+    const province = provinces.find((p) => p.province_id === item.province_id);
+    const imageUrl =
+        type === "place"
+            ? (item as Place).thumbnail_url
+            : (item as Event).image_url;
+
+    const rating = item.rating;
+
+    return (
+        <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-none shadow-sm flex flex-col h-full bg-card">
+            <div className="relative h-48 w-full overflow-hidden">
+                <Image
+                    src={imageUrl || "/placeholder.jpg"}
+                    alt={item.name}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute top-3 right-3 flex gap-2">
+                    <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm uppercase text-[10px]">
+                        {type === 'place' ? (item as Place).location_type : (item as Event).event_type}
+                    </Badge>
+                </div>
+                {(item as any).best_season && (
+                    <div className="absolute top-3 left-3">
+                        <Badge className="bg-primary/90 hover:bg-primary capitalize shadow-sm text-[10px]">
+                            {(item as any).best_season}
+                        </Badge>
+                    </div>
+                )}
+            </div>
+
+            <CardContent className="p-4 flex-1">
+                <div className="flex justify-between items-start mb-2">
+                    <div>
+                        <h3 className="font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">
+                            {item.name_en}
+                        </h3>
+                        <p className="text-sm text-muted-foreground line-clamp-1">
+                            {item.name}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-md border border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-900/50 h-fit">
+                        <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                        <span className="text-xs font-bold text-yellow-700 dark:text-yellow-500">
+                            {rating}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="space-y-2 mt-3">
+                    <div className="flex items-center text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4 mr-2 text-primary" />
+                        {province?.name_en}
+                    </div>
+
+                    {type === "event" && (item as Event).start_date && (
+                        <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-2 text-primary" />
+                            {new Date((item as Event).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {' - '}
+                            {new Date((item as Event).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                    {item.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
+                            #{tag}
+                        </span>
+                    ))}
+                    {item.tags.length > 3 && (
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
+                            +{item.tags.length - 3}
+                        </span>
+                    )}
+                </div>
+            </CardContent>
+
+            <CardFooter className="p-4 pt-0">
+                <Link href={`/${type}/${type === 'place' ? (item as Place).place_id : (item as Event).event_id}`} className="w-full">
+                    <Button variant="outline" className="w-full bg-transparent hover:bg-primary hover:text-white transition-colors">
+                        View Details
+                    </Button>
+                </Link>
+            </CardFooter>
+        </Card>
+    );
+}
