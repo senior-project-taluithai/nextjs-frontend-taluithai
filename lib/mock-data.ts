@@ -60,6 +60,36 @@ export interface Review {
   avatar_url?: string;
 }
 
+export interface TripItem {
+  item_id: number;
+  place_id?: number;
+  event_id?: number;
+  note?: string;
+  order: number;
+  start_time?: string; // HH:mm
+  end_time?: string;   // HH:mm
+}
+
+export interface TripDay {
+  day_id: number;
+  day_number: number;
+  date: string; // ISO date
+  items: TripItem[];
+}
+
+export interface Trip {
+  trip_id: number;
+  user_id: string;
+  name: string;
+  start_date: string; // ISO date
+  end_date: string; // ISO date
+  province_id?: number;
+  province_name?: string; // Helper for UI
+  status: 'draft' | 'upcoming' | 'completed';
+  cover_image?: string;
+  days: TripDay[];
+}
+
 // --- Mock Data ---
 
 export const provinces: Province[] = [
@@ -250,6 +280,187 @@ export const places: Place[] = [
       "https://picsum.photos/800/600?random=51"
     ],
     reviews: []
+  },
+  // Extra Mock Data for Chiang Mai to test Pagination (Need > 10 items)
+  {
+    place_id: 111,
+    name: "วัดเจดีย์หลวง",
+    name_en: "Wat Chedi Luang",
+    introduction: "วัดเก่าแก่ใจกลางเมือง",
+    detail: "วัดเจดีย์หลวงวรวิหาร เป็นวัดเก่าแก่ในจังหวัดเชียงใหม่...",
+    category_id: 1,
+    province_id: 1,
+    latitude: 18.7870,
+    longitude: 98.9860,
+    location_type: "temple",
+    best_season: "all_year",
+    tags: ["Culture", "Temple", "History"],
+    rating: 4.6,
+    thumbnail_url: "https://picsum.photos/800/600?random=111",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 112,
+    name: "ดอยอินทนนท์",
+    name_en: "Doi Inthanon",
+    introduction: "ยอดเขาที่สูงที่สุดในไทย",
+    detail: "อุทยานแห่งชาติดอยอินทนนท์ มีความสูงจากระดับน้ำทะเล 2,565 เมตร...",
+    category_id: 3,
+    province_id: 1,
+    latitude: 18.5884,
+    longitude: 98.4863,
+    location_type: "mountain",
+    best_season: "winter",
+    tags: ["Nature", "Mountain", "Viewpoint"],
+    rating: 4.9,
+    thumbnail_url: "https://picsum.photos/800/600?random=112",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 113,
+    name: "ถนนคนเดินท่าแพ",
+    name_en: "Sunday Walking Street",
+    introduction: "ตลาดนัดวันอาทิตย์ที่ใหญ่ที่สุด",
+    detail: "ถนนคนเดินท่าแพ จัดขึ้นทุกวันอาทิตย์...",
+    category_id: 4,
+    province_id: 1,
+    latitude: 18.7877,
+    longitude: 98.9930,
+    location_type: "market",
+    best_season: "all_year",
+    tags: ["Shopping", "Food", "Culture"],
+    rating: 4.7,
+    thumbnail_url: "https://picsum.photos/800/600?random=113",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 114,
+    name: "สวนสัตว์เชียงใหม่",
+    name_en: "Chiang Mai Zoo",
+    introduction: "สวนสัตว์ขนาดใหญ่เชิงดอยสุเทพ",
+    detail: "สวนสัตว์เชียงใหม่ มีสัตว์นานาชนิด...",
+    category_id: 5,
+    province_id: 1,
+    latitude: 18.8090,
+    longitude: 98.9480,
+    location_type: "zoo",
+    best_season: "winter",
+    tags: ["Nature", "Family", "Animals"],
+    rating: 4.3,
+    thumbnail_url: "https://picsum.photos/800/600?random=114",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 115,
+    name: "นิมมานเหมินท์",
+    name_en: "Nimmanhemin Road",
+    introduction: "ย่านฮิปสเตอร์ของเชียงใหม่",
+    detail: "ถนนนิมมานเหมินท์ เต็มไปด้วยร้านคาเฟ่ ร้านอาหาร...",
+    category_id: 4,
+    province_id: 1,
+    latitude: 18.7970,
+    longitude: 98.9680,
+    location_type: "city",
+    best_season: "all_year",
+    tags: ["Shopping", "Food", "Cafe"],
+    rating: 4.5,
+    thumbnail_url: "https://picsum.photos/800/600?random=115",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 116,
+    name: "ม่อนแจ่ม",
+    name_en: "Mon Jam",
+    introduction: "ดอยสวยอากาศดี",
+    detail: "ม่อนแจ่ม อากาศหนาวเย็นตลอดปี...",
+    category_id: 3,
+    province_id: 1,
+    latitude: 18.9350,
+    longitude: 98.8220,
+    location_type: "mountain",
+    best_season: "winter",
+    tags: ["Nature", "Viewpoint", "Camping"],
+    rating: 4.6,
+    thumbnail_url: "https://picsum.photos/800/600?random=116",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 117,
+    name: "วัดอุโมงค์",
+    name_en: "Wat Umong",
+    introduction: "วัดป่าในอุโมงค์",
+    detail: "วัดอุโมงค์สวนพุทธธรรม...",
+    category_id: 1,
+    province_id: 1,
+    latitude: 18.7830,
+    longitude: 98.9510,
+    location_type: "temple",
+    best_season: "all_year",
+    tags: ["Culture", "Temple", "Peaceful"],
+    rating: 4.7,
+    thumbnail_url: "https://picsum.photos/800/600?random=117",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 118,
+    name: "แกรนด์แคนยอนหางดง",
+    name_en: "Grand Canyon Chiang Mai",
+    introduction: "สวนน้ำธรรมชาติ",
+    detail: "แกรนด์แคนยอนเชียงใหม่...",
+    category_id: 2,
+    province_id: 1,
+    latitude: 18.6960,
+    longitude: 98.8930,
+    location_type: "nature",
+    best_season: "summer",
+    tags: ["Nature", "Adventure", "Swimming"],
+    rating: 4.4,
+    thumbnail_url: "https://picsum.photos/800/600?random=118",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 119,
+    name: "ไนท์บาซาร์",
+    name_en: "Night Bazaar",
+    introduction: "ตลาดกลางคืนชื่อดัง",
+    detail: "เชียงใหม่ไนท์บาซาร์...",
+    category_id: 4,
+    province_id: 1,
+    latitude: 18.7850,
+    longitude: 99.0000,
+    location_type: "market",
+    best_season: "all_year",
+    tags: ["Shopping", "Food", "Nightlife"],
+    rating: 4.2,
+    thumbnail_url: "https://picsum.photos/800/600?random=119",
+    image_urls: [],
+    reviews: []
+  },
+  {
+    place_id: 120,
+    name: "อุทยานหลวงราชพฤกษ์",
+    name_en: "Royal Park Rajapruek",
+    introduction: "สวนพฤกษศาสตร์นานาชาติ",
+    detail: "อุทยานหลวงราชพฤกษ์...",
+    category_id: 3,
+    province_id: 1,
+    latitude: 18.7460,
+    longitude: 98.9250,
+    location_type: "garden",
+    best_season: "winter",
+    tags: ["Nature", "Garden", "Flowers"],
+    rating: 4.8,
+    thumbnail_url: "https://picsum.photos/800/600?random=120",
+    image_urls: [],
+    reviews: []
   }
 ];
 
@@ -297,3 +508,48 @@ export const events: Event[] = [
     reviews: []
   }
 ];
+
+export const trips: Trip[] = [
+  {
+    trip_id: 1001,
+    user_id: "user_1",
+    name: "Chiang Mai Adventure",
+    start_date: "2024-12-20",
+    end_date: "2024-12-25",
+    province_id: 1,
+    province_name: "Chiang Mai",
+    status: 'draft',
+    cover_image: "https://picsum.photos/800/600?random=1",
+    days: [
+      { day_id: 1, day_number: 1, date: "2024-12-20", items: [] },
+      { day_id: 2, day_number: 2, date: "2024-12-21", items: [] },
+    ]
+  },
+  {
+    trip_id: 1002,
+    user_id: "user_1",
+    name: "Phuket Beach Getaway",
+    start_date: "2024-11-10",
+    end_date: "2024-11-12",
+    province_id: 2,
+    province_name: "Phuket",
+    status: 'upcoming',
+    cover_image: "https://picsum.photos/800/600?random=2",
+    days: [
+       { day_id: 3, day_number: 1, date: "2024-11-10", items: [{ item_id: 1, place_id: 102, order: 1, start_time: "10:00", end_time: "12:00" }] },
+    ]
+  },
+  {
+    trip_id: 1003,
+    user_id: "user_1",
+    name: "Bangkok Food Tour",
+    start_date: "2023-05-10",
+    end_date: "2023-05-11",
+    province_id: 3,
+    province_name: "Bangkok",
+    status: 'completed',
+    cover_image: "https://picsum.photos/1000/600?random=3",
+     days: []
+  }
+];
+

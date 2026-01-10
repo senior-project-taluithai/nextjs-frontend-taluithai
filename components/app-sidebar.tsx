@@ -66,7 +66,7 @@ const data = {
     },
     {
       title: "My Trips",
-      url: "/trips",
+      url: "/my-trip",
       icon: Map,
     },
     {
