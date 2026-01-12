@@ -19,19 +19,19 @@ import {
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const event = events.find((e) => e.event_id === Number(id));
+    const event = events.find((e) => e.id === Number(id));
     const [isFavorite, setIsFavorite] = useState(false);
 
     if (!event) {
         notFound();
     }
 
-    const province = provinces.find(p => p.province_id === event.province_id);
+    const province = provinces.find(p => p.id === event.province_id);
     const startDate = new Date(event.start_date);
     const endDate = new Date(event.end_date);
 
-    // Ensure image_urls exists even if not in type clearly yet (runtime safety)
-    const images = event.image_urls || [event.image_url];
+    // Ensure image_urls exists
+    const images = event.image_urls.length > 0 ? event.image_urls : [event.thumbnail_url];
 
     return (
         <div className="min-h-screen pb-20">
@@ -68,7 +68,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         ) : (
                             <div className="relative h-full w-full">
                                 <Image
-                                    src={event.image_url}
+                                    src={event.thumbnail_url}
                                     alt={event.name}
                                     fill
                                     className="object-cover"
@@ -82,7 +82,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex flex-col justify-center">
                         <div className="flex flex-wrap gap-2 mb-4">
                             <Badge className="bg-primary text-primary-foreground border-0">
-                                {event.event_type}
+                                {event.categories[0] || 'Event'}
                             </Badge>
                             {event.is_highlight && (
                                 <Badge variant="secondary" className="bg-yellow-500 text-white border-0 hover:bg-yellow-600">
@@ -109,7 +109,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                             <div className="flex items-center gap-3 font-medium">
                                 <Star className="w-5 h-5 text-yellow-500 fill-yellow-500 shrink-0" />
-                                <span>{event.rating ?? "New"} ({event.reviews?.length ?? 0} reviews)</span>
+                                <span>{event.rating ?? "New"} ({event.event_reviews?.length ?? 0} reviews)</span>
                             </div>
                         </div>
 
@@ -138,14 +138,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         <section className="bg-card p-6 rounded-xl border shadow-sm">
                             <h3 className="text-xl font-bold mb-4">Event Details</h3>
                             <p className="text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
-                                {event.description}
+                                {event.detail}
                             </p>
                         </section>
 
                         <section>
                             <h3 className="text-xl font-bold mb-4">Tags</h3>
                             <div className="flex flex-wrap gap-2">
-                                {event.tags.map(tag => (
+                                {event.categories.map(tag => (
                                     <Badge key={tag} variant="outline" className="px-3 py-1">
                                         #{tag}
                                     </Badge>
@@ -154,7 +154,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
 
                         <section>
-                            <ReviewsSection reviews={event.reviews || []} />
+                            <ReviewsSection reviews={event.event_reviews || []} />
                         </section>
                     </div>
 

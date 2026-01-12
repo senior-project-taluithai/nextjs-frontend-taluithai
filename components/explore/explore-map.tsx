@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { Place, Event } from "@/lib/mock-data";
+import { PlaceDetailDto, EventDetailDto } from "@/lib/mock-data";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import Image from "next/image";
@@ -25,13 +25,13 @@ const customIcon = L.icon({
 });
 
 interface ExploreMapProps {
-    items: (Place | Event)[];
+    items: (PlaceDetailDto | EventDetailDto)[];
     center?: [number, number];
     zoom?: number;
 }
 
 // Internal component to handle view updates
-function MapController({ items }: { items: (Place | Event)[] }) {
+function MapController({ items }: { items: (PlaceDetailDto | EventDetailDto)[] }) {
     const map = useMap();
 
     useEffect(() => {
@@ -71,10 +71,10 @@ export default function ExploreMap({ items, center = [13.7563, 100.5018], zoom =
             <MapController items={validItems} />
 
             {validItems.map((item: any) => {
-                const isPlace = 'place_id' in item;
-                const id = isPlace ? item.place_id : item.event_id;
+                const isPlace = !('start_date' in item);
+                const id = item.id;
                 const type = isPlace ? 'place' : 'event';
-                const imageUrl = isPlace ? item.thumbnail_url : item.image_url;
+                const imageUrl = item.thumbnail_url;
 
                 return (
                     <Marker
@@ -99,7 +99,7 @@ export default function ExploreMap({ items, center = [13.7563, 100.5018], zoom =
                                 </div>
                                 <div className="flex items-center gap-1 text-xs font-semibold text-yellow-600">
                                     <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                                    {item.rating} <span className="text-muted-foreground font-normal">({item.reviews?.length || 0})</span>
+                                    {item.rating} <span className="text-muted-foreground font-normal">({(isPlace ? item.place_reviews : item.event_reviews)?.length || 0})</span>
                                 </div>
                                 <Link
                                     href={`/${type}/${id}`}

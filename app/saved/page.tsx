@@ -88,7 +88,7 @@ export default function SavedPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {savedItems.places.map((item) => (
                                 <ExploreCard
-                                    key={`place-${item.place_id}`}
+                                    key={`place-${item.id}`}
                                     item={item}
                                     type="place"
                                 />
@@ -118,7 +118,7 @@ export default function SavedPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {savedItems.events.map((item) => (
                                 <ExploreCard
-                                    key={`event-${item.event_id}`}
+                                    key={`event-${item.id}`}
                                     item={item}
                                     type="event"
                                 />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Review } from "@/lib/mock-data";
+import { PlaceReview, EventReview } from "@/lib/mock-data";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,9 +9,11 @@ import { StarRating } from "@/components/ui/star-rating";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MessageSquare } from "lucide-react";
 
+type Review = PlaceReview | EventReview;
+
 interface ReviewsSectionProps {
     reviews: Review[];
-    onAddReview?: (review: Omit<Review, "review_id" | "date">) => void;
+    onAddReview?: (review: any) => void;
 }
 
 export function ReviewsSection({ reviews: initialReviews }: ReviewsSectionProps) {
@@ -29,13 +31,15 @@ export function ReviewsSection({ reviews: initialReviews }: ReviewsSectionProps)
 
         // Simulate API delay
         setTimeout(() => {
-            const newReview: Review = {
-                review_id: Math.random(),
+            const newReview = {
+                id: Math.floor(Math.random() * 100000),
                 user_name: "You (Guest)", // Mock user
                 rating: newRating,
                 comment: comment,
-                date: new Date().toISOString().split('T')[0]
-            };
+                date: new Date().toISOString().split('T')[0],
+                user_id: 'guest',
+                place_id: 0 // Mock
+            } as unknown as Review;
 
             setReviews([newReview, ...reviews]);
             setNewRating(0);
@@ -90,7 +94,7 @@ export function ReviewsSection({ reviews: initialReviews }: ReviewsSectionProps)
                             </div>
                         ) : (
                             reviews.map((review) => (
-                                <div key={review.review_id} className="flex gap-4 p-4 border rounded-lg bg-card hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                                <div key={review.id} className="flex gap-4 p-4 border rounded-lg bg-card hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
                                     <Avatar>
                                         <AvatarImage src={review.avatar_url} alt={review.user_name} />
                                         <AvatarFallback><User className="w-4 h-4" /></AvatarFallback>

@@ -111,7 +111,7 @@ export default function CreateTripPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {provinces.map((p) => (
-                                        <SelectItem key={p.province_id} value={p.province_id.toString()}>
+                                        <SelectItem key={p.id} value={p.id.toString()}>
                                             {p.name_en} ({p.name})
                                         </SelectItem>
                                     ))}

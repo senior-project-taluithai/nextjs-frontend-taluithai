@@ -19,14 +19,14 @@ import {
 
 export default function PlaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const place = places.find((p) => p.place_id === Number(id));
+    const place = places.find((p) => p.id === Number(id));
     const [isFavorite, setIsFavorite] = useState(false);
 
     if (!place) {
         notFound();
     }
 
-    const province = provinces.find(p => p.province_id === place.province_id);
+    const province = provinces.find(p => p.id === place.province_id);
 
     return (
         <div className="min-h-screen pb-20">
@@ -73,7 +73,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex flex-col justify-center">
                         <div className="flex flex-wrap gap-2 mb-4">
                             <Badge variant="secondary" className="text-sm font-medium">
-                                {place.location_type}
+                                {place.categories[0] || 'Place'}
                             </Badge>
                             <Badge variant="outline" className="text-sm font-medium">
                                 Best: {place.best_season}
@@ -90,14 +90,14 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                             <div className="flex items-center gap-3 font-medium">
                                 <Star className="w-5 h-5 text-yellow-500 fill-yellow-500 shrink-0" />
-                                <span>{place.rating} ({place.reviews.length} reviews)</span>
+                                <span>{place.rating} ({place.place_reviews.length} reviews)</span>
                             </div>
                         </div>
 
                         <Separator className="my-8" />
 
                         <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 mb-8">
-                            {place.introduction}
+                            {place.detail}
                         </p>
 
                         <div className="flex gap-4">
@@ -134,7 +134,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         <section>
                             <h3 className="text-xl font-bold mb-4">Tags</h3>
                             <div className="flex flex-wrap gap-2">
-                                {place.tags.map(tag => (
+                                {place.categories.map(tag => (
                                     <Badge key={tag} variant="secondary" className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                                         #{tag}
                                     </Badge>
@@ -143,7 +143,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
 
                         <section>
-                            <ReviewsSection reviews={place.reviews} />
+                            <ReviewsSection reviews={place.place_reviews as any} />
                         </section>
                     </div>
 

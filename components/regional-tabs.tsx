@@ -28,7 +28,7 @@ export function RegionalTabs() {
                     <TabsContent key={region} value={region} className="mt-0">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                             {regionProvinces.map((province) => (
-                                <Link href={`#`} key={province.province_id} className="group cursor-pointer">
+                                <Link href={`#`} key={province.id} className="group cursor-pointer">
                                     <div className="relative aspect-[4/3] rounded-xl overflow-hidden mb-3">
                                         <Image
                                             src={province.image_url}

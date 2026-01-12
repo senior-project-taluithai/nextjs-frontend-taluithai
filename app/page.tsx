@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { places, events, Place, Event, provinces } from "@/lib/mock-data";
+import { places, events, PlaceDetailDto, EventDetailDto, provinces } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +81,7 @@ export default function Home() {
           >
             <CarouselContent className="-ml-2 md:-ml-4">
               {places.map((place) => (
-                <CarouselItem key={place.place_id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
+                <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
                   <PlaceCard place={place} />
                 </CarouselItem>
               ))}
@@ -101,7 +101,7 @@ export default function Home() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {events.map((event) => (
-              <EventCard key={event.event_id} event={event} />
+              <EventCard key={event.id} event={event} />
             ))}
           </div>
         </section>
@@ -126,7 +126,7 @@ export default function Home() {
           >
             <CarouselContent className="-ml-2 md:-ml-4">
               {featuredPlaces.map((place) => (
-                <CarouselItem key={place.place_id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
+                <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
                   <PlaceCard place={place} />
                 </CarouselItem>
               ))}
@@ -148,7 +148,7 @@ export default function Home() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {winterPlaces.slice(0, 4).map((place) => (
-                <PlaceCard key={place.place_id} place={place} />
+                <PlaceCard key={place.id} place={place} />
               ))}
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold mb-8">Upcoming Festivals & Events</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {highlightEvents.map((event) => (
-              <EventCard key={event.event_id} event={event} />
+              <EventCard key={event.id} event={event} />
             ))}
           </div>
         </section>
@@ -174,9 +174,9 @@ export default function Home() {
   );
 }
 
-function PlaceCard({ place }: { place: Place }) {
+function PlaceCard({ place }: { place: PlaceDetailDto }) {
   return (
-    <Link href={`/place/${place.place_id}`} className="block h-full">
+    <Link href={`/place/${place.id}`} className="block h-full">
       <Card className="h-full border-0 shadow-md hover:shadow-xl transition-all duration-300 group overflow-hidden">
         <div className="relative aspect-[4/3] overflow-hidden">
           <Image
@@ -193,30 +193,30 @@ function PlaceCard({ place }: { place: Place }) {
         <CardContent className="p-4">
           <div className="flex justify-between items-start mb-2">
             <Badge variant="secondary" className="mb-2 text-xs font-normal">
-              {place.location_type}
+              {place.categories[0] || 'Place'}
             </Badge>
           </div>
           <h3 className="font-bold text-lg line-clamp-1 mb-1 group-hover:text-primary transition-colors">{place.name}</h3>
           <p className="text-muted-foreground text-sm flex items-center gap-1 mb-2">
-            <MapPin className="w-3 h-3" /> {provinces.find(p => p.province_id === place.province_id)?.name_en}
+            <MapPin className="w-3 h-3" /> {provinces.find(p => p.id === place.province_id)?.name_en}
           </p>
-          <p className="text-sm text-gray-500 line-clamp-2">{place.introduction}</p>
+          <p className="text-sm text-gray-500 line-clamp-2">{place.detail}</p>
         </CardContent>
       </Card>
     </Link>
   )
 }
 
-function EventCard({ event }: { event: Event }) {
-  const province = provinces.find(p => p.province_id === event.province_id);
+function EventCard({ event }: { event: EventDetailDto }) {
+  const province = provinces.find(p => p.id === event.province_id);
   const startDate = new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 
   return (
-    <Link href={`/event/${event.event_id}`} className="block h-full">
+    <Link href={`/event/${event.id}`} className="block h-full">
       <Card className="flex flex-col md:flex-row overflow-hidden border-0 shadow-lg hover:shadow-xl transition-shadow h-full group">
         <div className="relative w-full md:w-2/5 aspect-video md:aspect-auto">
           <Image
-            src={event.image_url}
+            src={event.thumbnail_url}
             alt={event.name}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -229,12 +229,12 @@ function EventCard({ event }: { event: Event }) {
         </div>
         <div className="flex-1 p-6 flex flex-col justify-center">
           <div className="flex gap-2 mb-3">
-            {event.tags.map(tag => (
+            {event.categories.map(tag => (
               <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
             ))}
           </div>
           <h3 className="text-2xl font-bold mb-2 group-hover:text-primary transition-colors">{event.name_en}</h3>
-          <p className="text-muted-foreground mb-4 line-clamp-2">{event.description}</p>
+          <p className="text-muted-foreground mb-4 line-clamp-2">{event.detail}</p>
           <div className="flex items-center gap-4 text-sm text-gray-500 mt-auto">
             <div className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
@@ -242,7 +242,7 @@ function EventCard({ event }: { event: Event }) {
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              {event.event_type}
+              {event.categories[0]}
             </div>
           </div>
         </div>

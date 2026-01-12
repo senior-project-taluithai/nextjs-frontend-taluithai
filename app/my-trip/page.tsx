@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { trips, Trip } from "@/lib/mock-data";
+import { trips, TripDetailDto, provinces, tripProvinces } from "@/lib/mock-data";
 import { Plus, Clock, CheckCircle2, FileEdit, ChevronDown, ChevronUp, MapPin, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,7 @@ export default function MyTripsPage() {
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {sortedTrips.drafts.map(trip => (
-                                <TripCard key={trip.trip_id} trip={trip} />
+                                <TripCard key={trip.id} trip={trip} />
                             ))}
                         </div>
                     </section>
@@ -58,7 +58,7 @@ export default function MyTripsPage() {
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {sortedTrips.upcoming.map(trip => (
-                                <TripCard key={trip.trip_id} trip={trip} />
+                                <TripCard key={trip.id} trip={trip} />
                             ))}
                         </div>
                     </section>
@@ -84,7 +84,7 @@ export default function MyTripsPage() {
                             <CollapsibleContent>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75 grayscale hover:grayscale-0 transition-all duration-300">
                                     {sortedTrips.completed.map(trip => (
-                                        <TripCard key={trip.trip_id} trip={trip} />
+                                        <TripCard key={trip.id} trip={trip} />
                                     ))}
                                 </div>
                             </CollapsibleContent>
@@ -96,21 +96,26 @@ export default function MyTripsPage() {
     );
 }
 
-function TripCard({ trip }: { trip: Trip }) {
+function TripCard({ trip }: { trip: TripDetailDto }) {
     const statusColors = {
         draft: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-100/80",
         upcoming: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 hover:bg-blue-100/80",
         completed: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100/80",
     };
 
+    const tripProvince = tripProvinces.find(tp => tp.trip_id === trip.id);
+    const province = provinces.find(p => p.id === tripProvince?.province_id);
+    const cover_image = province?.image_url;
+    const province_name = province?.name_en;
+
     return (
-        <Link href={`/my-trip/${trip.trip_id}`} className="group block h-full">
+        <Link href={`/my-trip/${trip.id}`} className="group block h-full">
             <div className="h-full bg-card rounded-xl border shadow-sm overflow-hidden group-hover:shadow-md transition-shadow flex flex-col">
                 {/* Cover Image */}
                 <div className="relative h-40 w-full bg-slate-200">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        src={trip.cover_image || "https://picsum.photos/1000/600?grayscale"}
+                        src={cover_image || "https://picsum.photos/1000/600?grayscale"}
                         alt={trip.name}
                         className="w-full h-full object-cover"
                     />
@@ -127,10 +132,10 @@ function TripCard({ trip }: { trip: Trip }) {
                     </h3>
 
                     <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {trip.province_name && (
+                        {province_name && (
                             <div className="flex items-center gap-2">
                                 <MapPin className="w-4 h-4 shrink-0" />
-                                <span>{trip.province_name}</span>
+                                <span>{province_name}</span>
                             </div>
                         )}
                         <div className="flex items-center gap-2">

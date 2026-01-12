@@ -86,10 +86,10 @@ export default function TripMap({ items, center = [13.7563, 100.5018], zoom = 10
             <MapController items={validItems} />
 
             {validItems.map((item: any) => {
-                const isPlace = 'place_id' in item;
-                const id = isPlace ? item.place_id : item.event_id;
+                const isPlace = item.type === 'place';
+                const id = item.id;
                 const type = isPlace ? 'place' : 'event';
-                const imageUrl = isPlace ? item.thumbnail_url : item.image_url;
+                const imageUrl = item.thumbnail_url;
 
                 // Determine Icon
                 let icon = blueIcon;

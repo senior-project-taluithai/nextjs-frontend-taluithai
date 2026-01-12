@@ -5,20 +5,17 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Place, Event, provinces } from "@/lib/mock-data";
+import { PlaceDetailDto, EventDetailDto, provinces } from "@/lib/mock-data";
 import { Calendar, MapPin, Star } from "lucide-react";
 
 interface ExploreCardProps {
-    item: Place | Event;
+    item: PlaceDetailDto | EventDetailDto;
     type: "place" | "event";
 }
 
 export function ExploreCard({ item, type }: ExploreCardProps) {
-    const province = provinces.find((p) => p.province_id === item.province_id);
-    const imageUrl =
-        type === "place"
-            ? (item as Place).thumbnail_url
-            : (item as Event).image_url;
+    const province = provinces.find((p) => p.id === item.province_id);
+    const imageUrl = item.thumbnail_url;
 
     const rating = item.rating;
 
@@ -33,7 +30,7 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
                 />
                 <div className="absolute top-3 right-3 flex gap-2">
                     <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm uppercase text-[10px]">
-                        {type === 'place' ? (item as Place).location_type : (item as Event).event_type}
+                        {item.categories[0] || type}
                     </Badge>
                 </div>
                 {(item as any).best_season && (
@@ -69,32 +66,32 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
                         {province?.name_en}
                     </div>
 
-                    {type === "event" && (item as Event).start_date && (
+                    {type === "event" && (item as EventDetailDto).start_date && (
                         <div className="flex items-center text-sm text-muted-foreground">
                             <Calendar className="w-4 h-4 mr-2 text-primary" />
-                            {new Date((item as Event).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as EventDetailDto).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             {' - '}
-                            {new Date((item as Event).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as EventDetailDto).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </div>
                     )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                    {item.tags.slice(0, 3).map((tag) => (
+                    {item.categories.slice(0, 3).map((tag) => (
                         <span key={tag} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
                             #{tag}
                         </span>
                     ))}
-                    {item.tags.length > 3 && (
+                    {item.categories.length > 3 && (
                         <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
-                            +{item.tags.length - 3}
+                            +{item.categories.length - 3}
                         </span>
                     )}
                 </div>
             </CardContent>
 
             <CardFooter className="p-4 pt-0">
-                <Link href={`/${type}/${type === 'place' ? (item as Place).place_id : (item as Event).event_id}`} className="w-full">
+                <Link href={`/${type}/${item.id}`} className="w-full">
                     <Button variant="outline" className="w-full bg-transparent hover:bg-primary hover:text-white transition-colors">
                         View Details
                     </Button>

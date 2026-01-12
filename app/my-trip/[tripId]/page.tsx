@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { places, events, trips, Trip } from "@/lib/mock-data";
+import { places, events, trips, TripDetailDto, tripProvinces, provinces } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +28,12 @@ const RecommendationSection = ({ title, icon: Icon, items, type, onAdd, checkIsA
             {/* Horizontal Scroll for Recommendations */}
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-transparent snap-x">
                 {items.map((item: any) => (
-                    <div key={item.place_id || item.event_id} className="min-w-[280px] w-[280px] snap-start">
+                    <div key={item.id} className="min-w-[280px] w-[280px] snap-start">
                         <PlannerCard
                             item={item}
                             type={type}
                             onAdd={() => onAdd(item, type)}
-                            isAdded={checkIsAdded(type, item.place_id || item.event_id)}
+                            isAdded={checkIsAdded(type, item.id)}
                         />
                     </div>
                 ))}
@@ -45,7 +45,7 @@ const RecommendationSection = ({ title, icon: Icon, items, type, onAdd, checkIsA
 export default function TripPlannerPage({ params }: { params: Promise<{ tripId: string }> }) {
     const { tripId } = use(params);
     const router = useRouter();
-    const [trip, setTrip] = useState<Trip | null>(null);
+    const [trip, setTrip] = useState<TripDetailDto | null>(null);
     const [selectedDay, setSelectedDay] = useState<number>(1);
     const [activeTab, setActiveTab] = useState<string>("places");
 
@@ -57,7 +57,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
     // Load trip data
     useEffect(() => {
-        const foundTrip = trips.find(t => t.trip_id.toString() === tripId);
+        const foundTrip = trips.find(t => t.id.toString() === tripId);
         if (foundTrip) {
             setTrip(foundTrip);
         } else {
@@ -75,9 +75,12 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const suggestions = useMemo(() => {
         if (!trip) return { places: [], events: [], saved: [], recommended: [], paginatedPlaces: [], totalPages: 0 };
 
-        // 1. Base Filter by Province
-        const provincePlaces = places.filter(p => p.province_id === trip.province_id);
-        const provinceEvents = events.filter(e => e.province_id === trip.province_id);
+        // 1. Base Filter by Province - Look up province via relation
+        const tripProvince = tripProvinces.find(tp => tp.trip_id === trip.id);
+        const provinceId = tripProvince?.province_id;
+
+        const provincePlaces = places.filter(p => p.province_id === provinceId);
+        const provinceEvents = events.filter(e => e.province_id === provinceId);
 
         // 2. Recommendations (Static logic) - Top 8 for 2x4 grid
         const recommended = provincePlaces
@@ -100,11 +103,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         // Category Filter
         if (selectedCategory !== "All") {
             if (selectedCategory === "Nature") {
-                filteredPlaces = filteredPlaces.filter(p => p.category_id === 2 || p.category_id === 3 || p.tags.includes('Nature') || p.tags.includes('Beach'));
+                filteredPlaces = filteredPlaces.filter(p => p.categories.includes('Nature') || p.categories.includes('Beach') || p.categories.includes('mountain') || p.categories.includes('nature') || p.categories.includes('beach'));
             } else if (selectedCategory === "Culture") {
-                filteredPlaces = filteredPlaces.filter(p => p.category_id === 1 || p.tags.includes('Culture') || p.tags.includes('Temple'));
+                filteredPlaces = filteredPlaces.filter(p => p.categories.includes('Culture') || p.categories.includes('Temple'));
             } else {
-                filteredPlaces = filteredPlaces.filter(p => p.tags.includes(selectedCategory));
+                filteredPlaces = filteredPlaces.filter(p => p.categories.includes(selectedCategory));
             }
         }
 
@@ -134,10 +137,10 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         // Flatten all items from all days
         // In real app, we need to fetch full details for each item.
         // Here we map back to mock data
-        const allItems = trip.days.flatMap(day => day.items.map(item => {
-            const place = item.place_id ? places.find(p => p.place_id === item.place_id) : null;
-            const event = item.event_id ? events.find(e => e.event_id === item.event_id) : null;
-            return place || event;
+        const allItems = trip.TripDays.flatMap(day => day.items.map(item => {
+            const place = item.place_id ? places.find(p => p.id === item.place_id) : null;
+            const event = item.event_id ? events.find(e => e.id === item.event_id) : null;
+            return place ? { ...place, type: 'place' } : (event ? { ...event, type: 'event' } : null);
         })).filter(Boolean);
 
         // Also include suggestions if needed? No, just trip plan items usually.
@@ -150,11 +153,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         return <div className="p-8 text-center text-muted-foreground">Loading trip...</div>;
     }
 
-    const currentDay = trip.days.find(d => d.day_number === selectedDay);
+    const currentDay = trip.TripDays.find(d => d.day_number === selectedDay);
 
     const checkIsAdded = (type: 'place' | 'event', id: number) => {
         // Simple check if item exists in ANY day of the trip
-        return trip.days.some(day =>
+        return trip.TripDays.some(day =>
             day.items.some(item =>
                 (type === 'place' && item.place_id === id) ||
                 (type === 'event' && item.event_id === id)
@@ -168,47 +171,47 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         // In real app: Mutation to add item
         // Mock update local state
         const newItem = {
-            item_id: Math.random(),
-            place_id: type === 'place' ? item.place_id : undefined,
-            event_id: type === 'event' ? item.event_id : undefined,
+            id: Math.floor(Math.random() * 100000),
+            place_id: type === 'place' ? item.id : undefined,
+            event_id: type === 'event' ? item.id : undefined,
             order: currentDay.items.length + 1,
             start_time: "09:00", // Default start
             end_time: "10:00"    // Default end
         };
 
-        const updatedDays = trip.days.map(d => {
+        const updatedDays = trip.TripDays.map(d => {
             if (d.day_number === selectedDay) {
                 return { ...d, items: [...d.items, newItem] };
             }
             return d;
         });
 
-        setTrip({ ...trip, days: updatedDays });
+        setTrip({ ...trip, TripDays: updatedDays });
     };
 
     const handleRemoveFromDay = (itemId: number) => {
-        const updatedDays = trip.days.map(d => {
+        const updatedDays = trip.TripDays.map(d => {
             if (d.day_number === selectedDay) {
-                return { ...d, items: d.items.filter(i => i.item_id !== itemId) };
+                return { ...d, items: d.items.filter(i => i.id !== itemId) };
             }
             return d;
         });
-        setTrip({ ...trip, days: updatedDays });
+        setTrip({ ...trip, TripDays: updatedDays });
     };
 
     const handleTimeChange = (itemId: number, field: 'start_time' | 'end_time', value: string) => {
-        const updatedDays = trip.days.map(d => {
+        const updatedDays = trip.TripDays.map(d => {
             if (d.day_number === selectedDay) {
                 return {
                     ...d,
                     items: d.items.map(i =>
-                        i.item_id === itemId ? { ...i, [field]: value } : i
+                        i.id === itemId ? { ...i, [field]: value } : i
                     )
                 };
             }
             return d;
         });
-        setTrip({ ...trip, days: updatedDays });
+        setTrip({ ...trip, TripDays: updatedDays });
     }
 
     const categories = ["All", "Nature", "Culture", "Food", "Shopping"];
@@ -229,7 +232,12 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                             </Badge>
                         </h1>
                         <p className="text-xs text-muted-foreground">
-                            {new Date(trip.start_date).toLocaleDateString()} - {new Date(trip.end_date).toLocaleDateString()} • {trip.province_name}
+                            {new Date(trip.start_date).toLocaleDateString()} - {new Date(trip.end_date).toLocaleDateString()}
+                            {(() => {
+                                const tripProvince = tripProvinces.find(tp => tp.trip_id === trip.id);
+                                const province = provinces.find(p => p.id === tripProvince?.province_id);
+                                return province ? ` • ${province.name_en}` : '';
+                            })()}
                         </p>
                     </div>
                 </div>
@@ -246,9 +254,9 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                 <div className="w-[450px] flex-none border-r bg-slate-50 dark:bg-slate-900/50 flex flex-col">
                     <div className="p-4 border-b bg-card">
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                            {trip.days.map((day) => (
+                            {trip.TripDays.map((day) => (
                                 <button
-                                    key={day.day_id}
+                                    key={day.id}
                                     onClick={() => setSelectedDay(day.day_number)}
                                     className={`flex-none px-4 py-2 rounded-full text-sm font-medium transition-colors border ${selectedDay === day.day_number
                                         ? "bg-primary text-primary-foreground border-primary"
@@ -277,15 +285,15 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                         ) : (
                             currentDay?.items.map((item, index) => {
                                 // Find generic details
-                                const placeDetail = item.place_id ? places.find(p => p.place_id === item.place_id) : null;
-                                const eventDetail = item.event_id ? events.find(e => e.event_id === item.event_id) : null;
+                                const placeDetail = item.place_id ? places.find(p => p.id === item.place_id) : null;
+                                const eventDetail = item.event_id ? events.find(e => e.id === item.event_id) : null;
                                 const detail = placeDetail || eventDetail;
                                 const type = placeDetail ? 'place' : 'event';
 
                                 if (!detail) return null;
 
                                 return (
-                                    <div key={item.item_id} className="relative group bg-white dark:bg-slate-800 p-3 rounded-lg border shadow-sm flex gap-3">
+                                    <div key={item.id} className="relative group bg-white dark:bg-slate-800 p-3 rounded-lg border shadow-sm flex gap-3">
                                         {/* Timeline Connector */}
                                         {index !== (currentDay.items.length - 1) && (
                                             <div className="absolute left-[1.65rem] top-10 bottom-[-1rem] w-0.5 bg-slate-200 dark:bg-slate-700 -z-10" />
@@ -308,7 +316,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
                                                 <MapPin className="w-3 h-3" />
-                                                {(detail as any).location_type || (detail as any).event_type}
+                                                {(detail as any).categories?.[0] || 'Unknown'}
                                             </p>
 
                                             {/* Time Inputs */}
@@ -319,7 +327,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                                         type="time"
                                                         className="h-6 text-xs pl-6"
                                                         value={item.start_time || ""}
-                                                        onChange={(e) => handleTimeChange(item.item_id, 'start_time', e.target.value)}
+                                                        onChange={(e) => handleTimeChange(item.id, 'start_time', e.target.value)}
                                                     />
                                                 </div>
                                                 <span className="text-xs text-muted-foreground">-</span>
@@ -328,14 +336,14 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                                         type="time"
                                                         className="h-6 text-xs px-1 text-center"
                                                         value={item.end_time || ""}
-                                                        onChange={(e) => handleTimeChange(item.item_id, 'end_time', e.target.value)}
+                                                        onChange={(e) => handleTimeChange(item.id, 'end_time', e.target.value)}
                                                     />
                                                 </div>
                                             </div>
 
                                             {/* Remove Button */}
                                             <button
-                                                onClick={() => handleRemoveFromDay(item.item_id)}
+                                                onClick={() => handleRemoveFromDay(item.id)}
                                                 className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -383,11 +391,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                                 {suggestions.recommended.map((item) => (
                                                     <PlannerCard
-                                                        key={item.place_id}
+                                                        key={item.id}
                                                         item={item}
                                                         type="place"
                                                         onAdd={() => handleAddToDay(item, 'place')}
-                                                        isAdded={checkIsAdded('place', item.place_id)}
+                                                        isAdded={checkIsAdded('place', item.id)}
                                                     />
                                                 ))}
                                             </div>
@@ -400,7 +408,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                     <div className="space-y-6">
                                         <div className="flex items-center justify-between">
                                             <h3 className="font-semibold flex items-center gap-2 text-primary text-lg">
-                                                All in {trip.province_name}
+                                                All in {(() => {
+                                                    const tripProvince = tripProvinces.find(tp => tp.trip_id === trip.id);
+                                                    const province = provinces.find(p => p.id === tripProvince?.province_id);
+                                                    return province?.name_en || 'Province';
+                                                })()}
                                             </h3>
                                         </div>
 
@@ -446,11 +458,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                             {suggestions.paginatedPlaces.length > 0 ? (
                                                 suggestions.paginatedPlaces.map(place => (
                                                     <PlannerCard
-                                                        key={place.place_id}
+                                                        key={place.id}
                                                         item={place}
                                                         type="place"
                                                         onAdd={() => handleAddToDay(place, 'place')}
-                                                        isAdded={checkIsAdded('place', place.place_id)}
+                                                        isAdded={checkIsAdded('place', place.id)}
                                                     />
                                                 ))
                                             ) : (
@@ -493,16 +505,20 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                     {suggestions.events.length > 0 ? (
                                         suggestions.events.map(event => (
                                             <PlannerCard
-                                                key={event.event_id}
+                                                key={event.id}
                                                 item={event}
                                                 type="event"
                                                 onAdd={() => handleAddToDay(event, 'event')}
-                                                isAdded={checkIsAdded('event', event.event_id)}
+                                                isAdded={checkIsAdded('event', event.id)}
                                             />
                                         ))
                                     ) : (
                                         <div className="col-span-full py-12 text-center text-muted-foreground">
-                                            No events found in {trip.province_name} during this period.
+                                            No events found in {(() => {
+                                                const tripProvince = tripProvinces.find(tp => tp.trip_id === trip.id);
+                                                const province = provinces.find(p => p.id === tripProvince?.province_id);
+                                                return province?.name_en || 'Province';
+                                            })()} during this period.
                                         </div>
                                     )}
                                 </TabsContent>
@@ -510,11 +526,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                 <TabsContent value="saved" className="mt-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {suggestions.saved.map((item: any) => (
                                         <PlannerCard
-                                            key={`${item.place_id || item.event_id}`}
+                                            key={`${item.id}`}
                                             item={item}
-                                            type={item.place_id ? 'place' : 'event'}
-                                            onAdd={() => handleAddToDay(item, item.place_id ? 'place' : 'event')}
-                                            isAdded={checkIsAdded(item.place_id ? 'place' : 'event', item.place_id || item.event_id)}
+                                            type={item.place_id ? 'place' : 'event'} // NOTE: saved items are inconsistent in mock, assuming they are proper DTOs.
+                                            onAdd={() => handleAddToDay(item, item.place_id ? 'place' : 'event')} // wait, if it's saved it should have ID
+                                            isAdded={checkIsAdded(item.place_id ? 'place' : 'event', item.id)}
                                         />
                                     ))}
                                 </TabsContent>
@@ -529,10 +545,9 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
 function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; onAdd: () => void; isAdded: boolean }) {
     // Determine image URL
-    const imageUrl = item.thumbnail_url || item.image_url;
-
+    const imageUrl = item.thumbnail_url;
     // Determine tags to show
-    const tags = item.tags || [];
+    const categories = item.categories || [];
 
     return (
         <div className="bg-card rounded-xl border-none shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col group h-full">
@@ -547,7 +562,7 @@ function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; 
                 {/* Badges */}
                 <div className="absolute top-3 right-3 flex gap-2">
                     <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm uppercase text-[10px] font-semibold tracking-wider">
-                        {type === 'place' ? item.location_type : item.event_type}
+                        {categories[0] || type}
                     </Badge>
                 </div>
 
@@ -591,14 +606,14 @@ function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; 
 
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5 mb-4">
-                    {tags.slice(0, 2).map((tag: string) => (
+                    {categories.slice(0, 2).map((tag: string) => (
                         <span key={tag} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
                             #{tag}
                         </span>
                     ))}
-                    {tags.length > 2 && (
+                    {categories.length > 2 && (
                         <span className="text-[10px] text-muted-foreground px-1">
-                            +{tags.length - 2}
+                            +{categories.length - 2}
                         </span>
                     )}
                 </div>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { places, events, Place, Event, provinces } from "@/lib/mock-data";
+import { places, events, PlaceDetailDto, EventDetailDto, provinces } from "@/lib/mock-data";
 import { ExploreFilters } from "@/components/explore/explore-filters";
 import { ExploreCard } from "@/components/explore/explore-card";
 import { Button } from "@/components/ui/button";
@@ -75,7 +75,7 @@ export default function ExplorePage() {
             }
 
             // 2. Region & Province
-            const province = provinces.find(p => p.province_id === item.province_id);
+            const province = provinces.find(p => p.id === item.province_id);
             if (filters.region.length > 0 && province) {
                 if (!filters.region.includes(province.region_name)) return false;
             }
@@ -83,27 +83,31 @@ export default function ExplorePage() {
                 if (!filters.provinceIds.includes(item.province_id)) return false;
             }
 
+            // 4. Season
+            if (item.__type === 'place' && filters.bestSeason.length > 0) {
+                if (!filters.bestSeason.includes((item as any).best_season)) return false;
+            }
+
             // 3. Types
             if (item.__type === 'place') {
-                if (filters.locationType.length > 0 && !filters.locationType.includes((item as any).location_type)) {
-                    return false;
+                if (filters.locationType.length > 0) {
+                    const overlap = (item as any).categories.some((c: string) => filters.locationType.includes(c));
+                    if (!overlap) return false;
                 }
             }
             if (item.__type === 'event') {
-                if (filters.eventType.length > 0 && !filters.eventType.includes((item as any).event_type)) return false;
-            }
-
-            // 4. Season
-            if ('best_season' in item && filters.bestSeason.length > 0) {
-                if (!filters.bestSeason.includes((item as any).best_season)) return false;
+                if (filters.eventType.length > 0) {
+                    const overlap = (item as any).categories.some((c: string) => filters.eventType.includes(c));
+                    if (!overlap) return false;
+                }
             }
 
             // 5. Rating
             if (item.rating < filters.minRating) return false;
 
-            // 6. Tags
+            // 6. Tags (now Categories for us, but UI might still send 'tags')
             if (filters.tags.length > 0) {
-                const hasTag = item.tags.some(tag => filters.tags.includes(tag));
+                const hasTag = (item as any).categories.some((tag: string) => filters.tags.includes(tag));
                 if (!hasTag) return false;
             }
 
@@ -113,7 +117,11 @@ export default function ExplorePage() {
         // Sort Logic
         items.sort((a, b) => {
             if (sortBy === 'rating') return b.rating - a.rating;
-            if (sortBy === 'popular') return (b.reviews?.length || 0) - (a.reviews?.length || 0);
+            if (sortBy === 'popular') {
+                const reviewCountA = a.__type === 'place' ? (a as any).place_reviews?.length : (a as any).event_reviews?.length;
+                const reviewCountB = b.__type === 'place' ? (b as any).place_reviews?.length : (b as any).event_reviews?.length;
+                return (reviewCountB || 0) - (reviewCountA || 0);
+            }
             if (sortBy === 'near_me') return 0; // Requires GPS, mock for now
             // Recommended (Default) - Shuffle deterministic or just ID
             return 0;
@@ -246,7 +254,7 @@ export default function ExplorePage() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {paginatedItems.map((item) => (
                                         <ExploreCard
-                                            key={`${item.__type}-${(item as any).place_id || (item as any).event_id}`}
+                                            key={`${item.__type}-${item.id}`}
                                             item={item}
                                             type={item.__type}
                                         />

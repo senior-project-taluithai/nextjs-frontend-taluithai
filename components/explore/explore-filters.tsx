@@ -124,21 +124,21 @@ export function ExploreFilters({ filters, setFilters, className }: ExploreFilter
                             </div>
                             <div className="max-h-40 overflow-y-auto space-y-2 pr-2 scrollbar-thin">
                                 {filteredProvinces.map((province) => (
-                                    <div key={province.province_id} className="flex items-center space-x-2">
+                                    <div key={province.id} className="flex items-center space-x-2">
                                         <Checkbox
-                                            id={`prov-${province.province_id}`}
-                                            checked={(filters.provinceIds || []).includes(province.province_id)}
+                                            id={`prov-${province.id}`}
+                                            checked={(filters.provinceIds || []).includes(province.id)}
                                             onCheckedChange={(c) => {
                                                 setFilters((prev: any) => {
                                                     const current = prev.provinceIds || [];
                                                     const updated = c
-                                                        ? [...current, province.province_id]
-                                                        : current.filter((id: number) => id !== province.province_id);
+                                                        ? [...current, province.id]
+                                                        : current.filter((id: number) => id !== province.id);
                                                     return { ...prev, provinceIds: updated, page: 1 };
                                                 });
                                             }}
                                         />
-                                        <Label htmlFor={`prov-${province.province_id}`} className="text-sm font-normal cursor-pointer line-clamp-1">{province.name_en}</Label>
+                                        <Label htmlFor={`prov-${province.id}`} className="text-sm font-normal cursor-pointer line-clamp-1">{province.name_en}</Label>
                                     </div>
                                 ))}
                             </div>
