@@ -27,17 +27,10 @@ export type {
     UpdateUserPreferencesDto
 };
 
+import { api } from './api-client';
+
 // --- API Service ---
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true, // Important for cookies
-});
 
 export const authService = {
   register: async (data: RegisterDto): Promise<AuthResponse> => {
