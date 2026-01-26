@@ -417,7 +417,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                         </div>
 
                                         {/* Search and Filter Bar */}
-                                        <div className="flex flex-col gap-3 sticky top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm">
+                                        <div className="flex flex-col gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm">
                                             <div className="relative">
                                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input
