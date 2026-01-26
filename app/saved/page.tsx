@@ -1,27 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ExploreCard } from "@/components/explore/explore-card";
-import { places, events } from "@/lib/mock-data";
 import { Heart, MapPin, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useFavoritePlaces, useFavoriteEvents } from "@/hooks/api/useFavorites";
 
 export default function SavedPage() {
-    // Simulate saved items mock data
-    const savedItems = useMemo(() => {
-        const savedPlaces = places.slice(0, 5).map(p => ({ ...p, __type: 'place' as const }));
-        const savedEvents = events.slice(0, 3).map(e => ({ ...e, __type: 'event' as const }));
-        return { places: savedPlaces, events: savedEvents };
-    }, []);
-
     // Independent Pagination States
     const [placePage, setPlacePage] = useState(1);
     const [eventPage, setEventPage] = useState(1);
 
-    // Mock total pages
-    const totalPlacePages = 3;
-    const totalEventPages = 2;
+    const { data: favoritePlacesData, isLoading: isLoadingPlaces } = useFavoritePlaces(placePage, 8);
+    const { data: favoriteEventsData, isLoading: isLoadingEvents } = useFavoriteEvents(eventPage, 8);
+
+    const savedPlaces = favoritePlacesData?.data ?? [];
+    const savedEvents = favoriteEventsData?.data ?? [];
+    const totalPlacePages = favoritePlacesData?.lastPage ?? 1;
+    const totalEventPages = favoriteEventsData?.lastPage ?? 1;
+
 
     // Render a Pagination Control helper
     const renderPagination = (currentPage: number, setPage: (p: number) => void, totalPages: number) => (
@@ -52,7 +50,7 @@ export default function SavedPage() {
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                onClick={() => setPage(Math.min(true ? totalPages : 1, currentPage + 1))} // Fix logic if needed, totalPages from API is correct
                 disabled={currentPage === totalPages}
             >
                 <ChevronRight className="h-4 w-4" />
@@ -78,15 +76,18 @@ export default function SavedPage() {
                     <h2 className="text-2xl font-semibold flex items-center gap-2">
                         <MapPin className="text-blue-500" />
                         Saved Places
-                        <span className="text-sm font-normal text-muted-foreground ml-2">({savedItems.places.length} items)</span>
+                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                            ({favoritePlacesData?.total ?? 0} items)
+                        </span>
                     </h2>
-                    {/* Pagination Top (Optional) or Bottom - User asked for UI, putting at bottom usually best, but can be top too. Let's stick to bottom as standard. */}
                 </div>
 
-                {savedItems.places.length > 0 ? (
+                {isLoadingPlaces ? (
+                    <div className="h-40 flex items-center justify-center text-muted-foreground">Loading saved places...</div>
+                ) : savedPlaces.length > 0 ? (
                     <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {savedItems.places.map((item) => (
+                            {savedPlaces.map((item) => (
                                 <ExploreCard
                                     key={`place-${item.id}`}
                                     item={item}
@@ -94,7 +95,7 @@ export default function SavedPage() {
                                 />
                             ))}
                         </div>
-                        {renderPagination(placePage, setPlacePage, totalPlacePages)}
+                        {totalPlacePages > 1 && renderPagination(placePage, setPlacePage, totalPlacePages)}
                     </>
                 ) : (
                     <EmptyState type="places" />
@@ -109,14 +110,18 @@ export default function SavedPage() {
                     <h2 className="text-2xl font-semibold flex items-center gap-2">
                         <Calendar className="text-orange-500" />
                         Saved Events
-                        <span className="text-sm font-normal text-muted-foreground ml-2">({savedItems.events.length} items)</span>
+                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                            ({favoriteEventsData?.total ?? 0} items)
+                        </span>
                     </h2>
                 </div>
 
-                {savedItems.events.length > 0 ? (
+                {isLoadingEvents ? (
+                    <div className="h-40 flex items-center justify-center text-muted-foreground">Loading saved events...</div>
+                ) : savedEvents.length > 0 ? (
                     <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {savedItems.events.map((item) => (
+                            {savedEvents.map((item) => (
                                 <ExploreCard
                                     key={`event-${item.id}`}
                                     item={item}
@@ -124,7 +129,7 @@ export default function SavedPage() {
                                 />
                             ))}
                         </div>
-                        {renderPagination(eventPage, setEventPage, totalEventPages)}
+                        {totalEventPages > 1 && renderPagination(eventPage, setEventPage, totalEventPages)}
                     </>
                 ) : (
                     <EmptyState type="events" />

@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { useEvent } from "@/hooks/api/useEvents";
 import { useProvinces } from "@/hooks/api/useProvinces";
+import { useToggleFavoriteEvent } from "@/hooks/api/useFavorites";
 import {
     Carousel,
     CarouselContent,
@@ -22,6 +23,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
     const { data: event, isLoading: isLoadingEvent, isError } = useEvent(Number(id));
     const { data: provinces = [] } = useProvinces();
+    const { mutate: toggleFavorite } = useToggleFavoriteEvent();
 
     const [isFavorite, setIsFavorite] = useState(false);
 
@@ -126,7 +128,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             <Button
                                 size="lg"
                                 className={`flex-1 gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                                onClick={() => setIsFavorite(!isFavorite)}
+                                onClick={() => {
+                                    setIsFavorite(!isFavorite);
+                                    toggleFavorite(event.id);
+                                }}
                             >
                                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
                                 {isFavorite ? 'Saved' : 'Add to Favorites'}
@@ -182,7 +187,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 <Button
                                     size="lg"
                                     className={`w-full gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                                    onClick={() => setIsFavorite(!isFavorite)}
+                                    onClick={() => {
+                                        setIsFavorite(!isFavorite);
+                                        toggleFavorite(event.id);
+                                    }}
                                 >
                                     <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
                                     {isFavorite ? 'Saved to Calendar' : 'Add to Favorites'}

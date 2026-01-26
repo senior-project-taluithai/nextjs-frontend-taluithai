@@ -5,15 +5,18 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { PlaceDetailDto, EventDetailDto, provinces } from "@/lib/mock-data";
 import { Calendar, MapPin, Star } from "lucide-react";
+import { Place } from "@/lib/dtos/place.dto";
+import { Event } from "@/lib/dtos/event.dto";
+import { useProvinces } from "@/hooks/api/useProvinces";
 
 interface ExploreCardProps {
-    item: PlaceDetailDto | EventDetailDto;
+    item: Place | Event;
     type: "place" | "event";
 }
 
 export function ExploreCard({ item, type }: ExploreCardProps) {
+    const { data: provinces = [] } = useProvinces();
     const province = provinces.find((p) => p.id === item.province_id);
     const imageUrl = item.thumbnail_url;
 
@@ -24,13 +27,13 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
             <div className="relative h-48 w-full overflow-hidden">
                 <Image
                     src={imageUrl || "/placeholder.jpg"}
-                    alt={item.name}
+                    alt={item.name || item.name_en || "Explore Item"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute top-3 right-3 flex gap-2">
                     <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm uppercase text-[10px]">
-                        {item.categories[0] || type}
+                        {(item.categories || [])[0] || type}
                     </Badge>
                 </div>
                 {(item as any).best_season && (
@@ -66,25 +69,25 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
                         {province?.name_en}
                     </div>
 
-                    {type === "event" && (item as EventDetailDto).start_date && (
+                    {type === "event" && (item as Event).start_date && (
                         <div className="flex items-center text-sm text-muted-foreground">
                             <Calendar className="w-4 h-4 mr-2 text-primary" />
-                            {new Date((item as EventDetailDto).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as Event).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             {' - '}
-                            {new Date((item as EventDetailDto).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as Event).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </div>
                     )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                    {item.categories.slice(0, 3).map((tag) => (
+                    {(item.categories || []).slice(0, 3).map((tag) => (
                         <span key={tag} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
                             #{tag}
                         </span>
                     ))}
-                    {item.categories.length > 3 && (
+                    {(item.categories || []).length > 3 && (
                         <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
-                            +{item.categories.length - 3}
+                            +{(item.categories || []).length - 3}
                         </span>
                     )}
                 </div>
@@ -100,3 +103,4 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
         </Card>
     );
 }
+

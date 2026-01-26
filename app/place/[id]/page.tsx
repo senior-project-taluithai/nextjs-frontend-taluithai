@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { usePlace } from "@/hooks/api/usePlaces";
 import { useProvinces } from "@/hooks/api/useProvinces";
+import { useToggleFavoritePlace } from "@/hooks/api/useFavorites";
 import {
     Carousel,
     CarouselContent,
@@ -22,6 +23,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
     const { data: place, isLoading: isLoadingPlace, isError } = usePlace(Number(id));
     const { data: provinces = [] } = useProvinces();
+    const { mutate: toggleFavorite } = useToggleFavoritePlace();
     const [isFavorite, setIsFavorite] = useState(false);
 
     if (isLoadingPlace) {
@@ -110,7 +112,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                             <Button
                                 size="lg"
                                 className={`flex-1 gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                                onClick={() => setIsFavorite(!isFavorite)}
+                                onClick={() => {
+                                    setIsFavorite(!isFavorite);
+                                    toggleFavorite(place.id);
+                                }}
                             >
                                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
                                 {isFavorite ? 'Saved' : 'Add to Favorites'}
