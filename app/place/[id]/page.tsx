@@ -2,13 +2,14 @@
 
 import { use, useState } from "react";
 import Image from "next/image";
-import { places, provinces } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Heart, Share2, Info } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
+import { usePlace } from "@/hooks/api/usePlaces";
+import { useProvinces } from "@/hooks/api/useProvinces";
 import {
     Carousel,
     CarouselContent,
@@ -19,10 +20,15 @@ import {
 
 export default function PlaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const place = places.find((p) => p.id === Number(id));
+    const { data: place, isLoading: isLoadingPlace, isError } = usePlace(Number(id));
+    const { data: provinces = [] } = useProvinces();
     const [isFavorite, setIsFavorite] = useState(false);
 
-    if (!place) {
+    if (isLoadingPlace) {
+        return <div className="min-h-screen flex items-center justify-center">Loading place...</div>;
+    }
+
+    if (isError || !place) {
         notFound();
     }
 
@@ -86,11 +92,11 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         <div className="space-y-4 text-sm md:text-base">
                             <div className="flex items-center gap-3 font-medium">
                                 <MapPin className="w-5 h-5 text-primary shrink-0" />
-                                <span>{province?.name_en}, Thailand</span>
+                                <span>{province?.name_en || 'Thailand'}, Thailand</span>
                             </div>
                             <div className="flex items-center gap-3 font-medium">
                                 <Star className="w-5 h-5 text-yellow-500 fill-yellow-500 shrink-0" />
-                                <span>{place.rating} ({place.place_reviews.length} reviews)</span>
+                                <span>{place.rating} (0 reviews)</span>
                             </div>
                         </div>
 
@@ -143,7 +149,8 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
 
                         <section>
-                            <ReviewsSection reviews={place.place_reviews as any} />
+                            {/* Reviews mocked as empty for now */}
+                            <ReviewsSection reviews={[]} />
                         </section>
                     </div>
 

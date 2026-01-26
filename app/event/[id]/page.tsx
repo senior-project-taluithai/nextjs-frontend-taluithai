@@ -2,13 +2,14 @@
 
 import { use, useState } from "react";
 import Image from "next/image";
-import { events, provinces } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, Heart, Share2, Clock, Star } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
+import { useEvent } from "@/hooks/api/useEvents";
+import { useProvinces } from "@/hooks/api/useProvinces";
 import {
     Carousel,
     CarouselContent,
@@ -19,10 +20,16 @@ import {
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const event = events.find((e) => e.id === Number(id));
+    const { data: event, isLoading: isLoadingEvent, isError } = useEvent(Number(id));
+    const { data: provinces = [] } = useProvinces();
+
     const [isFavorite, setIsFavorite] = useState(false);
 
-    if (!event) {
+    if (isLoadingEvent) {
+        return <div className="min-h-screen flex items-center justify-center">Loading event...</div>;
+    }
+
+    if (isError || !event) {
         notFound();
     }
 
@@ -97,7 +104,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         <div className="space-y-4 text-sm md:text-base">
                             <div className="flex items-center gap-3 font-medium">
                                 <MapPin className="w-5 h-5 text-primary shrink-0" />
-                                <span>{province?.name_en}, Thailand</span>
+                                <span className="text-muted-foreground">{province?.name_en || 'Thailand'}, Thailand</span>
                             </div>
                             <div className="flex items-center gap-3 font-medium">
                                 <Calendar className="w-5 h-5 text-primary shrink-0" />
@@ -109,7 +116,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                             <div className="flex items-center gap-3 font-medium">
                                 <Star className="w-5 h-5 text-yellow-500 fill-yellow-500 shrink-0" />
-                                <span>{event.rating ?? "New"} ({event.event_reviews?.length ?? 0} reviews)</span>
+                                <span>{event.rating ?? "New"} (0 reviews)</span>
                             </div>
                         </div>
 
@@ -154,7 +161,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
 
                         <section>
-                            <ReviewsSection reviews={event.event_reviews || []} />
+                            {/* Reviews currently mocked as empty or need separate API. Using empty array for now as DTO doesn't strictly have it populated in list */}
+                            <ReviewsSection reviews={[]} />
                         </section>
                     </div>
 

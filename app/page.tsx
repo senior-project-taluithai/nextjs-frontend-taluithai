@@ -2,12 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { places, events, PlaceDetailDto, EventDetailDto, provinces } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Calendar, Star, ArrowRight } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useProvinces } from "@/hooks/api/useProvinces";
+import { useRecommendedPlaces, usePopularPlaces, useBestForSeasonPlaces } from "@/hooks/api/usePlaces";
+import { useUpcomingEvents } from "@/hooks/api/useEvents";
+import { Place } from "@/lib/dtos/place.dto";
+import { Event } from "@/lib/dtos/event.dto";
+import { Province } from "@/lib/dtos/province.dto";
 
 const RegionalTabs = dynamic(() => import("@/components/regional-tabs").then(mod => mod.RegionalTabs), {
   ssr: false,
@@ -24,10 +29,11 @@ import Autoplay from "embla-carousel-autoplay";
 import { useRef } from "react";
 
 export default function Home() {
-  const featuredPlaces = places.filter(p => p.rating >= 4.5);
-  const winterPlaces = places.filter(p => p.best_season === 'winter' || p.best_season === 'all_year');
-  const highlightEvents = events.filter(e => e.is_highlight);
-  const regions = ["North", "Central", "South", "Northeast", "East", "West"];
+  const { data: provinces = [] } = useProvinces();
+  const { data: recommendedPlaces = [], isLoading: isLoadingRecommended } = useRecommendedPlaces();
+  const { data: popularPlaces = [], isLoading: isLoadingPopular } = usePopularPlaces();
+  const { data: bestForSeasonPlaces = [], isLoading: isLoadingSeason } = useBestForSeasonPlaces();
+  const { data: upcomingEvents = [], isLoading: isLoadingEvents } = useUpcomingEvents();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autoplayPlugin = useRef(
@@ -72,26 +78,30 @@ export default function Home() {
             <Button variant="ghost" className="hidden md:flex gap-2">See More <ArrowRight className="w-4 h-4" /></Button>
           </div>
 
-          <Carousel
-            className="w-full"
-            opts={{
-              align: "start",
-              loop: true,
-            }}
-          >
-            <CarouselContent className="-ml-2 md:-ml-4">
-              {places.map((place) => (
-                <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
-                  <PlaceCard place={place} />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="hidden md:flex -left-12" />
-            <CarouselNext className="hidden md:flex -right-12" />
-          </Carousel>
+          {isLoadingRecommended ? (
+            <div className="h-64 flex items-center justify-center">Loading recommendations...</div>
+          ) : (
+            <Carousel
+              className="w-full"
+              opts={{
+                align: "start",
+                loop: true,
+              }}
+            >
+              <CarouselContent className="-ml-2 md:-ml-4">
+                {recommendedPlaces.map((place) => (
+                  <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
+                    <PlaceCard place={place} provinces={provinces} />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="hidden md:flex -left-12" />
+              <CarouselNext className="hidden md:flex -right-12" />
+            </Carousel>
+          )}
         </section>
 
-        {/* Recommended Festivals/Events for You */}
+        {/* Recommended Festivals/Events for You -> Using Upcoming for now as per plan */}
         <section>
           <div className="flex justify-between items-end mb-8">
             <div>
@@ -99,11 +109,15 @@ export default function Home() {
               <p className="text-muted-foreground">Don't miss these events matching your interests</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {events.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
+          {isLoadingEvents ? (
+            <div className="h-64 flex items-center justify-center">Loading events...</div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {upcomingEvents.slice(0, 2).map((event) => (
+                <EventCard key={event.id} event={event} provinces={provinces} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Popular Destinations Carousel */}
@@ -116,24 +130,28 @@ export default function Home() {
             <Button variant="ghost" className="hidden md:flex gap-2">View All <ArrowRight className="w-4 h-4" /></Button>
           </div>
 
-          <Carousel
-            plugins={[autoplayPlugin.current]}
-            className="w-full"
-            opts={{
-              align: "start",
-              loop: true,
-            }}
-          >
-            <CarouselContent className="-ml-2 md:-ml-4">
-              {featuredPlaces.map((place) => (
-                <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
-                  <PlaceCard place={place} />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="hidden md:flex -left-12" />
-            <CarouselNext className="hidden md:flex -right-12" />
-          </Carousel>
+          {isLoadingPopular ? (
+            <div className="h-64 flex items-center justify-center">Loading popular places...</div>
+          ) : (
+            <Carousel
+              plugins={[autoplayPlugin.current]}
+              className="w-full"
+              opts={{
+                align: "start",
+                loop: true,
+              }}
+            >
+              <CarouselContent className="-ml-2 md:-ml-4">
+                {popularPlaces.map((place) => (
+                  <CarouselItem key={place.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
+                    <PlaceCard place={place} provinces={provinces} />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="hidden md:flex -left-12" />
+              <CarouselNext className="hidden md:flex -right-12" />
+            </Carousel>
+          )}
         </section>
 
         {/* Seasonal Recommendations */}
@@ -146,35 +164,43 @@ export default function Home() {
               <h2 className="text-3xl font-bold">Best for this Season</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {winterPlaces.slice(0, 4).map((place) => (
-                <PlaceCard key={place.id} place={place} />
-              ))}
-            </div>
+            {isLoadingSeason ? (
+              <div className="h-64 flex items-center justify-center">Loading seasonal places...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {bestForSeasonPlaces.slice(0, 4).map((place) => (
+                  <PlaceCard key={place.id} place={place} provinces={provinces} />
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
-        {/* Highlight Events */}
+        {/* Highlight Events -> Using Upcoming (Highlight logic check?) */}
         <section>
           <h2 className="text-3xl font-bold mb-8">Upcoming Festivals & Events</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {highlightEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
+          {isLoadingEvents ? (
+            <div className="h-64 flex items-center justify-center">Loading upcoming events...</div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {upcomingEvents.filter(e => e.is_highlight).slice(0, 2).map((event) => (
+                <EventCard key={event.id} event={event} provinces={provinces} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Explore by Region */}
         <section>
           <h2 className="text-3xl font-bold mb-8 text-center">Explore by Region</h2>
-          <RegionalTabs />
+          <RegionalTabs provinces={provinces} />
         </section>
       </div>
     </main>
   );
 }
 
-function PlaceCard({ place }: { place: PlaceDetailDto }) {
+function PlaceCard({ place, provinces }: { place: Place; provinces: Province[] }) {
   return (
     <Link href={`/place/${place.id}`} className="block h-full">
       <Card className="h-full border-0 shadow-md hover:shadow-xl transition-all duration-300 group overflow-hidden">
@@ -207,7 +233,7 @@ function PlaceCard({ place }: { place: PlaceDetailDto }) {
   )
 }
 
-function EventCard({ event }: { event: EventDetailDto }) {
+function EventCard({ event, provinces }: { event: Event; provinces: Province[] }) {
   const province = provinces.find(p => p.id === event.province_id);
   const startDate = new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 
