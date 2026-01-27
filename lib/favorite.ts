@@ -25,4 +25,25 @@ export const favoriteService = {
   toggleFavoriteEvent: async (id: number): Promise<void> => {
     await api.post(`/favorites/events/${id}`);
   },
+
+  checkFavoritePlace: async (id: number): Promise<boolean> => {
+    // API might return boolean directly, or wrapped object.
+    const response = await api.get<any>(`/favorites/places/${id}/is-saved`);
+    const data = response.data;
+    if (typeof data === 'boolean') return data;
+    if (typeof data === 'object' && data !== null) {
+        return !!(data.isSaved || data.is_saved || data.saved || data.data);
+    }
+    return !!data;
+  },
+
+  checkFavoriteEvent: async (id: number): Promise<boolean> => {
+    const response = await api.get<any>(`/favorites/events/${id}/is-saved`);
+    const data = response.data;
+    if (typeof data === 'boolean') return data;
+    if (typeof data === 'object' && data !== null) {
+        return !!(data.isSaved || data.is_saved || data.saved || data.data);
+    }
+    return !!data;
+  },
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { usePlace } from "@/hooks/api/usePlaces";
 import { useProvinces } from "@/hooks/api/useProvinces";
-import { useToggleFavoritePlace } from "@/hooks/api/useFavorites";
+import { useToggleFavoritePlace, useIsFavoritePlace } from "@/hooks/api/useFavorites";
 import {
     Carousel,
     CarouselContent,
@@ -21,10 +21,11 @@ import {
 
 export default function PlaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const { data: place, isLoading: isLoadingPlace, isError } = usePlace(Number(id));
+    const placeId = Number(id);
+    const { data: place, isLoading: isLoadingPlace, isError } = usePlace(placeId);
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoritePlace();
-    const [isFavorite, setIsFavorite] = useState(false);
+    const { data: isSaved = false } = useIsFavoritePlace(placeId);
 
     if (isLoadingPlace) {
         return <div className="min-h-screen flex items-center justify-center">Loading place...</div>;
@@ -111,14 +112,13 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         <div className="flex gap-4">
                             <Button
                                 size="lg"
-                                className={`flex-1 gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                                className={`flex-1 gap-2 text-md ${isSaved ? 'bg-red-500 hover:bg-red-600' : ''}`}
                                 onClick={() => {
-                                    setIsFavorite(!isFavorite);
                                     toggleFavorite(place.id);
                                 }}
                             >
-                                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
-                                {isFavorite ? 'Saved' : 'Add to Favorites'}
+                                <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
+                                {isSaved ? 'Saved' : 'Add to Favorites'}
                             </Button>
                             <Button size="lg" variant="outline" className="px-6">
                                 <Share2 className="w-5 h-5" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { useEvent } from "@/hooks/api/useEvents";
 import { useProvinces } from "@/hooks/api/useProvinces";
-import { useToggleFavoriteEvent } from "@/hooks/api/useFavorites";
+import { useToggleFavoriteEvent, useIsFavoriteEvent } from "@/hooks/api/useFavorites";
 import {
     Carousel,
     CarouselContent,
@@ -21,11 +21,22 @@ import {
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const { data: event, isLoading: isLoadingEvent, isError } = useEvent(Number(id));
+    const eventId = Number(id);
+    const { data: event, isLoading: isLoadingEvent, isError } = useEvent(eventId);
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoriteEvent();
+    const { data: isSaved = false } = useIsFavoriteEvent(eventId);
 
-    const [isFavorite, setIsFavorite] = useState(false);
+    // We can use isSaved directly or sync it. 
+    // If we use local state for optimistic UI, we should init it with isSaved but useEffect to update?
+    // Or just rely on isSaved from query which will update after mutation success?
+    // Let's rely on query state mainly, but strict requirement "interactive" often implies optimistic.
+    // Tanstack query handles optimistic updates or invalidation. 
+    // My toggle hook invalidates "isSaved" query. So it should auto-update.
+    // I will replace local state `isFavorite` with `isSaved` from hook.
+
+    // const [isFavorite, setIsFavorite] = useState(false);  <-- Remove this
+
 
     if (isLoadingEvent) {
         return <div className="min-h-screen flex items-center justify-center">Loading event...</div>;
@@ -127,14 +138,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         <div className="flex gap-4">
                             <Button
                                 size="lg"
-                                className={`flex-1 gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                                className={`flex-1 gap-2 text-md ${isSaved ? 'bg-red-500 hover:bg-red-600' : ''}`}
                                 onClick={() => {
-                                    setIsFavorite(!isFavorite);
                                     toggleFavorite(event.id);
                                 }}
                             >
-                                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
-                                {isFavorite ? 'Saved' : 'Add to Favorites'}
+                                <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
+                                {isSaved ? 'Saved' : 'Add to Favorites'}
                             </Button>
                             <Button size="lg" variant="outline" className="px-6">
                                 <Share2 className="w-5 h-5" />
@@ -186,14 +196,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             <div className="space-y-3">
                                 <Button
                                     size="lg"
-                                    className={`w-full gap-2 text-md ${isFavorite ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                                    className={`w-full gap-2 text-md ${isSaved ? 'bg-red-500 hover:bg-red-600' : ''}`}
                                     onClick={() => {
-                                        setIsFavorite(!isFavorite);
                                         toggleFavorite(event.id);
                                     }}
                                 >
-                                    <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
-                                    {isFavorite ? 'Saved to Calendar' : 'Add to Favorites'}
+                                    <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
+                                    {isSaved ? 'Saved to Calendar' : 'Add to Favorites'}
                                 </Button>
                                 <Button size="lg" variant="outline" className="w-full gap-2">
                                     <Share2 className="w-5 h-5" /> Share Event

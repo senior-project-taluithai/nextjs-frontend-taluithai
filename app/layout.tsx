@@ -37,15 +37,13 @@ export default function RootLayout({
           >
             <SidebarProvider>
               <AppSidebar />
-              <main className="w-full relative ">
+              <main className="w-full relative overflow-x-hidden">
                 <div className="md:hidden p-4">
                   <SidebarTrigger />
                 </div>
                 {/* For magin all main content */}
                 {/* <div className="container mx-auto p-6 pt-0 md:pt-6"> */}
-                  <div className="container mx-auto overflow-hidden">
-                  {children}
-                </div>
+                {children}
               </main>
               <Toaster position="top-right" />
             </SidebarProvider>
