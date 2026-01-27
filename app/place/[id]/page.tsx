@@ -18,6 +18,12 @@ import {
     CarouselNext,
     CarouselPrevious,
 } from "@/components/ui/carousel";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("@/components/map/LeafletMap"), {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-slate-100 animate-pulse flex items-center justify-center text-muted-foreground">Loading Map...</div>
+});
 
 export default function PlaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -129,15 +135,16 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Details Section */}
-            <div className="container mx-auto px-4 py-16 max-w-4xl">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                    <div className="md:col-span-2 space-y-12">
+            <div className="container mx-auto px-4 py-16">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-16">
+                    {/* Left Column: Content */}
+                    <div className="lg:col-span-2 space-y-12">
                         <section>
-                            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                                 <Info className="w-6 h-6 text-primary" />
                                 About this place
                             </h3>
-                            <p className="text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+                            <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line">
                                 {place.detail}
                             </p>
                         </section>
@@ -159,25 +166,25 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
                     </div>
 
-                    {/* Sidebar Info */}
+                    {/* Right Column: Map */}
                     <div className="space-y-6">
-                        <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900 border space-y-4">
-                            <h4 className="font-bold text-lg">Location Info</h4>
-                            <div className="aspect-video bg-slate-200 rounded-lg relative overflow-hidden group cursor-pointer">
-                                {/* Placeholder Map */}
-                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground font-medium bg-slate-200 dark:bg-slate-800">
-                                    Map View
-                                </div>
+                        <div className="sticky top-24 space-y-4">
+                            <h3 className="text-xl font-bold flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-primary" />
+                                Location
+                            </h3>
+                            <div className="h-[400px] w-full rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 relative z-0">
+                                <Map pos={[place.latitude, place.longitude]} className="h-full w-full" popupContent={place.name} />
                             </div>
-                            <div className="text-sm space-y-2">
-                                <p className="flex justify-between">
-                                    <span className="text-muted-foreground">Latitude:</span>
-                                    <span className="font-mono">{place.latitude.toFixed(4)}</span>
-                                </p>
-                                <p className="flex justify-between">
-                                    <span className="text-muted-foreground">Longitude:</span>
-                                    <span className="font-mono">{place.longitude.toFixed(4)}</span>
-                                </p>
+                            <div className="flex justify-between text-sm text-muted-foreground bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
+                                <div>
+                                    <span className="font-semibold block">Latitude</span>
+                                    <span className="font-mono">{place.latitude.toFixed(6)}</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-semibold block">Longitude</span>
+                                    <span className="font-mono">{place.longitude.toFixed(6)}</span>
+                                </div>
                             </div>
                         </div>
                     </div>

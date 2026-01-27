@@ -4,7 +4,7 @@ import { use } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Heart, Share2, Clock, Star } from "lucide-react";
+import { Calendar, MapPin, Heart, Share2, Clock, Star, Info } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
@@ -18,6 +18,12 @@ import {
     CarouselNext,
     CarouselPrevious,
 } from "@/components/ui/carousel";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("@/components/map/LeafletMap"), {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-slate-100 animate-pulse flex items-center justify-center text-muted-foreground">Loading Map...</div>
+});
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -154,12 +160,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
             </div>
 
-            <div className="container mx-auto px-4 py-12 max-w-4xl">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                    <div className="md:col-span-2 space-y-12">
-                        <section className="bg-card p-6 rounded-xl border shadow-sm">
-                            <h3 className="text-xl font-bold mb-4">Event Details</h3>
-                            <p className="text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+            <div className="container mx-auto px-4 py-16">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-16">
+                    {/* Left Column: Content */}
+                    <div className="lg:col-span-2 space-y-12">
+                        <section className="bg-card p-0">
+                            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <Info className="w-6 h-6 text-primary" />
+                                About this event
+                            </h3>
+                            <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line">
                                 {event.detail}
                             </p>
                         </section>
@@ -181,32 +191,28 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         </section>
                     </div>
 
-                    {/* Sidebar Actions & Summary */}
+                    {/* Right Column: Sidebar Actions & Map */}
                     <div className="space-y-6">
-                        <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900 border space-y-6 sticky top-24">
-                            <div className="text-center">
-                                <p className="text-sm text-muted-foreground uppercase tracking-wider font-bold mb-1">Event Status</p>
-                                <p className="text-green-600 font-bold flex items-center justify-center gap-2">
-                                    <Clock className="w-4 h-4" /> Upcoming
-                                </p>
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-3">
-                                <Button
-                                    size="lg"
-                                    className={`w-full gap-2 text-md ${isSaved ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                                    onClick={() => {
-                                        toggleFavorite(event.id);
-                                    }}
-                                >
-                                    <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
-                                    {isSaved ? 'Saved to Calendar' : 'Add to Favorites'}
-                                </Button>
-                                <Button size="lg" variant="outline" className="w-full gap-2">
-                                    <Share2 className="w-5 h-5" /> Share Event
-                                </Button>
+                        <div className="sticky top-24 space-y-6">
+                            {/* Map Section */}
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <MapPin className="w-5 h-5 text-primary" />
+                                    Location
+                                </h3>
+                                <div className="h-[400px] w-full rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 relative z-0">
+                                    <Map pos={[event.latitude, event.longitude]} className="h-full w-full" popupContent={event.name} />
+                                </div>
+                                <div className="flex justify-between text-sm text-muted-foreground bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
+                                    <div>
+                                        <span className="font-semibold block">Latitude</span>
+                                        <span className="font-mono">{event.latitude.toFixed(6)}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="font-semibold block">Longitude</span>
+                                        <span className="font-mono">{event.longitude.toFixed(6)}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
