@@ -72,9 +72,9 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
                     {type === "event" && (item as Event).start_date && (
                         <div className="flex items-center text-sm text-muted-foreground">
                             <Calendar className="w-4 h-4 mr-2 text-primary" />
-                            {new Date((item as Event).start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as Event).start_date).toLocaleDateString("en-GB", { month: 'short', day: 'numeric' })}
                             {' - '}
-                            {new Date((item as Event).end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date((item as Event).end_date).toLocaleDateString("en-GB", { month: 'short', day: 'numeric' })}
                         </div>
                     )}
                 </div>
@@ -95,9 +95,9 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
 
             <CardFooter className="p-4 pt-0">
                 <Link href={`/${type}/${item.id}`} className="w-full">
-                    <Button variant="outline" className="w-full bg-transparent hover:bg-primary hover:text-white transition-colors">
+                    <div className="w-full h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-transparent hover:bg-primary hover:text-white">
                         View Details
-                    </Button>
+                    </div>
                 </Link>
             </CardFooter>
         </Card>

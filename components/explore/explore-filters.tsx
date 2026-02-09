@@ -15,21 +15,33 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { X, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { provinces } from "@/lib/mock-data";
+import { useProvinces } from "@/hooks/api/useProvinces";
+import { useCategories } from "@/hooks/api/useCategories";
+import { cn } from "@/lib/utils";
 
 interface ExploreFiltersProps {
     filters: any;
     setFilters: (filters: any) => void;
+    setPage: (page: number) => void;
     className?: string;
+    activeTab?: 'place' | 'event';
 }
 
 const REGIONS = ["North", "South", "Central", "Northeast", "East", "West"];
 const SEASONS = ["summer", "winter", "rainy", "all_year"];
-const PLACE_TYPES = ["temple", "beach", "mountain", "market", "viewpoint"];
-const EVENT_TYPES = ["festival", "cultural", "sports", "music"];
 
-export function ExploreFilters({ filters, setFilters, className }: ExploreFiltersProps) {
+export function ExploreFilters({ filters, setFilters, setPage, className, activeTab = 'place' }: ExploreFiltersProps) {
     const [provinceSearch, setProvinceSearch] = useState("");
+    const { data: categories = [] } = useCategories();
+    const { data: provinces = [] } = useProvinces();
+
+    const handleCategoryChange = (catId: string, checked: boolean | string) => {
+        setFilters((prev: any) => ({
+            ...prev,
+            categoryId: checked ? Number(catId) : undefined,
+        }));
+        setPage(1);
+    };
 
     const handleCheckboxChange = (category: string, value: string, checked: boolean | string) => {
         setFilters((prev: any) => {
@@ -39,24 +51,27 @@ export function ExploreFilters({ filters, setFilters, className }: ExploreFilter
                 : current.filter((item: string) => item !== value);
 
             // Reset pagination when filter changes
-            return { ...prev, [category]: updated, page: 1 };
+            return { ...prev, [category]: updated };
         });
+        setPage(1);
     };
 
     const updateRating = (val: number) => {
-        setFilters((prev: any) => ({ ...prev, minRating: val, page: 1 }));
+        setFilters((prev: any) => ({ ...prev, minRating: val }));
+        setPage(1);
     }
 
     const removeTag = (tag: string) => {
         setFilters((prev: any) => ({
             ...prev,
             tags: prev.tags.filter((t: string) => t !== tag),
-            page: 1
         }));
+        setPage(1);
     }
 
     const resetFilters = () => {
         setFilters({});
+        setPage(1);
     }
 
     const filteredProvinces = provinces.filter(p =>
@@ -75,7 +90,7 @@ export function ExploreFilters({ filters, setFilters, className }: ExploreFilter
     }
 
     return (
-        <div className={`space-y-6 ${className}`}>
+        <div className={cn("space-y-6", className)}>
             <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg">Filters</h3>
                 <Button
@@ -134,8 +149,9 @@ export function ExploreFilters({ filters, setFilters, className }: ExploreFilter
                                                     const updated = c
                                                         ? [...current, province.id]
                                                         : current.filter((id: number) => id !== province.id);
-                                                    return { ...prev, provinceIds: updated, page: 1 };
+                                                    return { ...prev, provinceIds: updated };
                                                 });
+                                                setPage(1);
                                             }}
                                         />
                                         <Label htmlFor={`prov-${province.id}`} className="text-sm font-normal cursor-pointer line-clamp-1">{province.name_en}</Label>
@@ -146,42 +162,23 @@ export function ExploreFilters({ filters, setFilters, className }: ExploreFilter
                     </AccordionContent>
                 </AccordionItem>
 
-                {/* Categories / Types */}
-                <AccordionItem value="type">
+                {/* Categories */}
+                <AccordionItem value="category">
                     <AccordionTrigger className="text-sm font-semibold">Category</AccordionTrigger>
                     <AccordionContent>
-                        <div className="space-y-4">
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground mb-2 mb-3 uppercase tracking-wider">Place Types</h4>
-                                <div className="space-y-2">
-                                    {PLACE_TYPES.map((type) => (
-                                        <div key={type} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`pt-${type}`}
-                                                checked={(filters.locationType || []).includes(type)}
-                                                onCheckedChange={(c) => handleCheckboxChange("locationType", type, c)}
-                                            />
-                                            <Label htmlFor={`pt-${type}`} className="text-sm font-normal capitalize cursor-pointer">{type}</Label>
-                                        </div>
-                                    ))}
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 scrollbar-thin">
+                            {categories.map((cat: any) => (
+                                <div key={cat.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`cat-${cat.id}`}
+                                        checked={filters.categoryId === cat.id}
+                                        onCheckedChange={(c) => handleCategoryChange(cat.id.toString(), c)}
+                                    />
+                                    <Label htmlFor={`cat-${cat.id}`} className="text-sm font-normal cursor-pointer">
+                                        {cat.nameEn} <span className="text-xs text-muted-foreground ml-1">({cat.name})</span>
+                                    </Label>
                                 </div>
-                            </div>
-                            <Separator />
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground mb-2 mb-3 uppercase tracking-wider">Event Types</h4>
-                                <div className="space-y-2">
-                                    {EVENT_TYPES.map((type) => (
-                                        <div key={type} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`et-${type}`}
-                                                checked={(filters.eventType || []).includes(type)}
-                                                onCheckedChange={(c) => handleCheckboxChange("eventType", type, c)}
-                                            />
-                                            <Label htmlFor={`et-${type}`} className="text-sm font-normal capitalize cursor-pointer">{type}</Label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            ))}
                         </div>
                     </AccordionContent>
                 </AccordionItem>

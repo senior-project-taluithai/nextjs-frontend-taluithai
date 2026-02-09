@@ -13,3 +13,14 @@ export interface Place {
   image_urls: string[];
   categories: string[];
 }
+
+export interface ExplorePlacesQuery {
+  searchTerm?: string;
+  regions?: string[];
+  provinces?: number[];
+  categoryId?: number;
+  bestSeason?: string[];
+  minRating?: number;
+  page?: number;
+  limit?: number;
+}

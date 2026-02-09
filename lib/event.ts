@@ -12,6 +12,11 @@ export const eventService = {
     return response.data;
   },
 
+  explore: async (query: import('./dtos/event.dto').ExploreEventsQuery): Promise<import('./dtos/pagination.dto').PaginatedResponse<Event>> => {
+    const response = await api.post<import('./dtos/pagination.dto').PaginatedResponse<Event>>('/events/explore', query);
+    return response.data;
+  },
+
   getById: async (id: number): Promise<Event> => {
     const response = await api.get<Event>(`/events/${id}`);
     return response.data;

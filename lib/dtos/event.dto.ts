@@ -17,4 +17,14 @@ export interface Event {
   categories: string[];
 }
 
+export interface ExploreEventsQuery {
+  searchTerm?: string;
+  regions?: string[];
+  provinces?: number[];
+  categoryId?: number;
+  minRating?: number;
+  page?: number;
+  limit?: number;
+}
+
 export type CreateEventDto = Omit<Event, 'id' | 'rating'>;

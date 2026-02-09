@@ -17,6 +17,11 @@ export const placeService = {
     return response.data;
   },
 
+  explore: async (query: import('./dtos/place.dto').ExplorePlacesQuery): Promise<import('./dtos/pagination.dto').PaginatedResponse<Place>> => {
+    const response = await api.post<import('./dtos/pagination.dto').PaginatedResponse<Place>>('/places/explore', query);
+    return response.data;
+  },
+
   getAll: async (): Promise<Place[]> => {
     const response = await api.get<Place[]>('/places');
     return response.data;

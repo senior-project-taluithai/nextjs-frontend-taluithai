@@ -16,6 +16,13 @@ export const useUpcomingEvents = () => {
   });
 };
 
+export const useExploreEvents = (query: import("@/lib/dtos/event.dto").ExploreEventsQuery) => {
+  return useQuery({
+    queryKey: ["events", "explore", query],
+    queryFn: () => eventService.explore(query),
+  });
+};
+
 export const useEvent = (id: number) => {
   return useQuery({
     queryKey: ["events", id],

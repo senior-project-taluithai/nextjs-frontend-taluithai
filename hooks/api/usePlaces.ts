@@ -36,3 +36,10 @@ export const useBestForSeasonPlaces = () => {
     queryFn: () => placeService.getBestForSeason(),
   });
 };
+
+export const useExplorePlaces = (query: import("@/lib/dtos/place.dto").ExplorePlacesQuery) => {
+  return useQuery({
+    queryKey: ["places", "explore", query],
+    queryFn: () => placeService.explore(query),
+  });
+};
