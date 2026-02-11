@@ -25,6 +25,19 @@ const TripMap = dynamic(() => import("@/components/my-trip/trip-map"), {
     loading: () => <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">Loading Map...</div>
 });
 
+import { EditTripDialog } from "@/components/my-trip/edit-trip-dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useDeleteTrip } from "@/hooks/api/useTrips";
+
 const RecommendationSection = ({ title, icon: Icon, items, type, onAdd, checkIsAdded }: any) => {
     if (!items || items.length === 0) return null;
     return (
@@ -55,6 +68,8 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const router = useRouter();
     const [selectedDay, setSelectedDay] = useState<number>(1);
     const [activeTab, setActiveTab] = useState<string>("places");
+    const [isEditTripOpen, setIsEditTripOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Filter States for "All Places"
     const [searchText, setSearchText] = useState("");
@@ -106,6 +121,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const addItemMutation = useAddTripDayItem();
     const removeItemMutation = useRemoveTripDayItem();
     const updateItemMutation = useUpdateTripDayItem();
+    const deleteTripMutation = useDeleteTrip();
 
     // Reset pagination when filters change
     useEffect(() => {
@@ -123,13 +139,26 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         return [...trip.TripDays].sort((a, b) => a.day_number - b.day_number);
     }, [trip?.TripDays]);
 
+    const currentDay = sortedDays.find(d => d.day_number === selectedDay);
+
     // Collect all items for the map
-    // TODO: Implement proper fetching of place/event details for map display
     const mapItems = useMemo(() => {
-        // For now, return empty until we implement fetching place/event details
-        // from trip day items (which only have IDs)
-        return [];
-    }, [trip]);
+        if (!currentDay) return [];
+        return currentDay.items.map(item => {
+            const detail = item.place || item.event;
+            if (!detail) return null;
+            return {
+                id: detail.id,
+                type: item.place ? 'place' : 'event',
+                name: detail.name,
+                name_en: detail.name_en,
+                latitude: detail.latitude,
+                longitude: detail.longitude,
+                rating: detail.rating,
+                thumbnail_url: detail.thumbnail_url
+            };
+        }).filter(item => item !== null && item.latitude && item.longitude);
+    }, [currentDay]);
 
 
     // Loading state - must be before any early returns
@@ -137,7 +166,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         return <div className="p-8 text-center text-muted-foreground">Loading trip...</div>;
     }
 
-    const currentDay = sortedDays.find(d => d.day_number === selectedDay);
+
 
     const checkIsAdded = (type: 'place' | 'event', id: number) => {
         // Simple check if item exists in ANY day of the trip
@@ -219,6 +248,18 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
         );
     }
 
+    const handleDeleteTrip = () => {
+        deleteTripMutation.mutate(parseInt(tripId), {
+            onSuccess: () => {
+                toast.success("Trip deleted successfully");
+                router.push("/my-trip");
+            },
+            onError: (error: any) => {
+                toast.error(`Failed to delete trip: ${error.message}`);
+            },
+        });
+    };
+
     const categories = ["All", "Nature", "Culture", "Food", "Shopping"];
 
     // Loading state
@@ -267,10 +308,34 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline">Share</Button>
-                    <Button size="sm">Save Changes</Button>
+                    <Button size="sm" variant="outline" onClick={() => setIsEditTripOpen(true)}>Edit</Button>
+                    <Button size="sm" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>Delete</Button>
                 </div>
             </header>
+
+            <EditTripDialog
+                open={isEditTripOpen}
+                onOpenChange={setIsEditTripOpen}
+                trip={trip}
+            />
+
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete your trip
+                            and remove all your planned items.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteTrip} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Main Content (Split View) */}
             <main className="flex-1 flex overflow-hidden">
