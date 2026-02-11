@@ -134,7 +134,7 @@ export interface ReorderItemsRequest {
 export interface PaginatedResult<T> {
   data: T[];
   page: number;
-  lastPage: number;
+  last_page: number; // Snake case from backend
   total: number;
 }
 
@@ -156,6 +156,7 @@ const tripExtendedApi = {
   },
 
   // Places in trip provinces
+  // Places in trip provinces
   getPlacesInTripProvinces: async (
     tripId: number,
     page: number = 1,
@@ -163,8 +164,11 @@ const tripExtendedApi = {
     search?: string,
     category?: string,
   ) => {
-    const response = await api.get<PaginatedResult<any>>(`/trips/${tripId}/places`, {
-      params: { page, limit, search, category },
+    const response = await api.post<PaginatedResult<any>>(`/trips/${tripId}/places`, {
+      page,
+      limit,
+      search,
+      category_id: category,
     });
     return response.data;
   },
@@ -192,6 +196,36 @@ const tripExtendedApi = {
 
   reorderTripDayItems: async (tripId: number, dayNumber: number, items: ReorderItemsRequest) => {
     const response = await api.put(`/trips/${tripId}/days/${dayNumber}/reorder`, items);
+    return response.data;
+  },
+
+  // Events in trip provinces
+  getEventsInTripProvinces: async (
+    tripId: number,
+    page: number = 1,
+    limit: number = 8,
+    search?: string,
+    category?: string,
+  ) => {
+    const response = await api.post<PaginatedResult<any>>(`/trips/${tripId}/events`, {
+      page,
+      limit,
+      search,
+      category_id: category,
+    });
+    return response.data;
+  },
+
+  // Saved items in trip provinces
+  getSavedItemsForTrip: async (
+    tripId: number,
+    type: 'place' | 'event',
+    page: number = 1,
+    limit: number = 8,
+  ) => {
+    const response = await api.get<PaginatedResult<any>>(`/trips/${tripId}/saved`, {
+      params: { type, page, limit },
+    });
     return response.data;
   },
 };
@@ -304,5 +338,34 @@ export function useReorderTripDayItems() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['trips', variables.tripId] });
     },
+  });
+}
+
+// Events filtering hook
+export function useTripEvents(
+  tripId: number,
+  page: number = 1,
+  limit: number = 8,
+  search?: string,
+  category?: string,
+) {
+  return useQuery({
+    queryKey: ['trips', tripId, 'events', page, limit, search, category],
+    queryFn: () => tripExtendedApi.getEventsInTripProvinces(tripId, page, limit, search, category),
+    enabled: !!tripId,
+  });
+}
+
+// Saved items hook
+export function useTripSavedItems(
+  tripId: number,
+  type: 'place' | 'event',
+  page: number = 1,
+  limit: number = 8,
+) {
+  return useQuery({
+    queryKey: ['trips', tripId, 'saved', type, page, limit],
+    queryFn: () => tripExtendedApi.getSavedItemsForTrip(tripId, type, page, limit),
+    enabled: !!tripId,
   });
 }

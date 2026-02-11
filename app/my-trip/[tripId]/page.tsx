@@ -4,15 +4,19 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, MapPin, Calendar, Clock, MoreVertical, Trash2, CheckCircle2, Map as MapIcon, List, Sparkles, Mountain, Landmark, Search, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import {
     useTrip,
     useTripRecommendedPlaces,
     useTripPlaces,
+    useTripEvents,
+    useTripSavedItems,
     useAddTripDayItem,
     useRemoveTripDayItem,
     useUpdateTripDayItem
@@ -75,6 +79,9 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const [searchText, setSearchText] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string>("");
     const [placesPage, setPlacesPage] = useState(1);
+    const [eventsPage, setEventsPage] = useState(1);
+    const [savedPage, setSavedPage] = useState(1);
+    const [savedType, setSavedType] = useState<'place' | 'event'>('place');
     const [recommendationsPage, setRecommendationsPage] = useState(1);
     const ITEMS_PER_PAGE = 8;
     const RECOMMENDATIONS_PER_PAGE = 8;
@@ -90,12 +97,30 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     );
 
     // Load places with filters
+    // Load places with filters
     const { data: placesData, isLoading: placesLoading } = useTripPlaces(
         parseInt(tripId),
         placesPage,
         ITEMS_PER_PAGE,
         searchText,
         selectedCategory
+    );
+
+    // Load events
+    const { data: eventsData, isLoading: eventsLoading } = useTripEvents(
+        parseInt(tripId),
+        eventsPage,
+        ITEMS_PER_PAGE,
+        searchText,
+        selectedCategory
+    );
+
+    // Load saved items
+    const { data: savedData, isLoading: savedLoading } = useTripSavedItems(
+        parseInt(tripId),
+        savedType,
+        savedPage,
+        ITEMS_PER_PAGE
     );
 
     // Debug: Log API responses
@@ -572,51 +597,242 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                         </div>
 
                                         {/* Pagination Controls */}
-                                        {placesData && placesData.lastPage > 1 && (
-                                            <div className="flex items-center justify-center gap-2 pt-6 pb-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    className="h-9 w-9"
-                                                    onClick={() => setPlacesPage(p => Math.max(1, p - 1))}
-                                                    disabled={placesPage === 1}
-                                                >
-                                                    <ChevronLeft className="w-4 h-4" />
-                                                </Button>
-                                                <span className="text-sm font-medium text-muted-foreground min-w-[80px] text-center">
-                                                    Page {placesPage} of {placesData.lastPage}
-                                                </span>
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    className="h-9 w-9"
-                                                    onClick={() => setPlacesPage(p => Math.min(placesData.lastPage, p + 1))}
-                                                    disabled={placesPage === placesData.lastPage}
-                                                >
-                                                    <ChevronRight className="w-4 h-4" />
-                                                </Button>
-                                            </div>
+
+                                        {placesData && (
+                                            <Pagination className="mt-6">
+                                                <PaginationContent>
+                                                    <PaginationItem>
+                                                        <PaginationPrevious
+                                                            onClick={() => setPlacesPage(p => Math.max(1, p - 1))}
+                                                            className={cn("cursor-pointer", placesPage === 1 && "pointer-events-none opacity-50")}
+                                                        />
+                                                    </PaginationItem>
+
+                                                    {Array.from({ length: placesData.last_page }).map((_, i) => {
+                                                        const page = i + 1;
+                                                        if (
+                                                            page === 1 ||
+                                                            page === placesData.last_page ||
+                                                            (page >= placesPage - 1 && page <= placesPage + 1)
+                                                        ) {
+                                                            return (
+                                                                <PaginationItem key={page}>
+                                                                    <PaginationLink
+                                                                        isActive={page === placesPage}
+                                                                        onClick={() => setPlacesPage(page)}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        {page}
+                                                                    </PaginationLink>
+                                                                </PaginationItem>
+                                                            );
+                                                        } else if (
+                                                            page === placesPage - 2 ||
+                                                            page === placesPage + 2
+                                                        ) {
+                                                            return <PaginationEllipsis key={page} />;
+                                                        }
+                                                        return null;
+                                                    })}
+
+                                                    <PaginationItem>
+                                                        <PaginationNext
+                                                            onClick={() => setPlacesPage(p => Math.max(1, Math.min(placesData.last_page || 1, p + 1)))}
+                                                            className={cn("cursor-pointer", placesPage === (placesData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                        />
+                                                    </PaginationItem>
+                                                </PaginationContent>
+                                            </Pagination>
                                         )}
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="events" className="mt-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    <div className="col-span-full py-12 text-center text-muted-foreground">
-                                        Events feature coming soon!
+                                <TabsContent value="events" className="mt-0 space-y-6">
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 text-blue-800">
+                                        <Clock className="w-5 h-5 mt-0.5 shrink-0" />
+                                        <div>
+                                            <div>
+                                                <h4 className="font-medium">Filtered by Trip Dates</h4>
+                                                <p className="text-sm mt-1 opacity-90">
+                                                    Showing events happening between {format(new Date(trip.start_date), 'dd MMM')} - {format(new Date(trip.end_date), 'dd MMM yyyy')}.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {eventsLoading ? (
+                                        <div className="flex justify-center py-12">
+                                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                        </div>
+                                    ) : eventsData && eventsData.data.length > 0 ? (
+                                        <>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                {eventsData.data.map((event: any) => (
+                                                    <PlannerCard
+                                                        key={event.id}
+                                                        item={event}
+                                                        type="event"
+                                                        onAdd={() => handleAddToDay(event, 'event')}
+                                                        isAdded={checkIsAdded('event', event.id)}
+                                                    />
+                                                ))}
+                                            </div>
+
+                                            {eventsData && (
+                                                <Pagination className="mt-6">
+                                                    <PaginationContent>
+                                                        <PaginationItem>
+                                                            <PaginationPrevious
+                                                                onClick={() => setEventsPage(p => Math.max(1, p - 1))}
+                                                                className={cn("cursor-pointer", eventsPage === 1 && "pointer-events-none opacity-50")}
+                                                            />
+                                                        </PaginationItem>
+
+                                                        {Array.from({ length: eventsData.last_page }).map((_, i) => {
+                                                            const page = i + 1;
+                                                            if (
+                                                                page === 1 ||
+                                                                page === eventsData.last_page ||
+                                                                (page >= eventsPage - 1 && page <= eventsPage + 1)
+                                                            ) {
+                                                                return (
+                                                                    <PaginationItem key={page}>
+                                                                        <PaginationLink
+                                                                            isActive={page === eventsPage}
+                                                                            onClick={() => setEventsPage(page)}
+                                                                            className="cursor-pointer"
+                                                                        >
+                                                                            {page}
+                                                                        </PaginationLink>
+                                                                    </PaginationItem>
+                                                                );
+                                                            } else if (
+                                                                page === eventsPage - 2 ||
+                                                                page === eventsPage + 2
+                                                            ) {
+                                                                return <PaginationEllipsis key={page} />;
+                                                            }
+                                                            return null;
+                                                        })}
+
+                                                        <PaginationItem>
+                                                            <PaginationNext
+                                                                onClick={() => setEventsPage(p => Math.max(1, Math.min(eventsData.last_page || 1, p + 1)))}
+                                                                className={cn("cursor-pointer", eventsPage === (eventsData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                            />
+                                                        </PaginationItem>
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                                            <Calendar className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                            <p>No events found for this trip's dates and provinces.</p>
+                                        </div>
+                                    )}
                                 </TabsContent>
 
-                                <TabsContent value="saved" className="mt-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    <div className="col-span-full py-12 text-center text-muted-foreground">
-                                        Saved items feature coming soon!
+                                <TabsContent value="saved" className="mt-0 space-y-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Button
+                                            variant={savedType === 'place' ? 'default' : 'outline'}
+                                            onClick={() => { setSavedType('place'); setSavedPage(1); }}
+                                            size="sm"
+                                        >
+                                            Saved Places
+                                        </Button>
+                                        <Button
+                                            variant={savedType === 'event' ? 'default' : 'outline'}
+                                            onClick={() => { setSavedType('event'); setSavedPage(1); }}
+                                            size="sm"
+                                        >
+                                            Saved Events
+                                        </Button>
                                     </div>
+
+                                    {savedLoading ? (
+                                        <div className="flex justify-center py-12">
+                                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                        </div>
+                                    ) : savedData && savedData.data.length > 0 ? (
+                                        <>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                {savedData.data.map((item: any) => (
+                                                    <PlannerCard
+                                                        key={item.id}
+                                                        item={item}
+                                                        type={savedType}
+                                                        onAdd={() => handleAddToDay(item, savedType)}
+                                                        isAdded={checkIsAdded(savedType, item.id)}
+                                                    />
+                                                ))}
+                                            </div>
+
+                                            {savedData && (
+                                                <Pagination className="mt-6">
+                                                    <PaginationContent>
+                                                        <PaginationItem>
+                                                            <PaginationPrevious
+                                                                onClick={() => setSavedPage(p => Math.max(1, p - 1))}
+                                                                className={cn("cursor-pointer", savedPage === 1 && "pointer-events-none opacity-50")}
+                                                            />
+                                                        </PaginationItem>
+
+                                                        {Array.from({ length: savedData.last_page }).map((_, i) => {
+                                                            const page = i + 1;
+                                                            if (
+                                                                page === 1 ||
+                                                                page === savedData.last_page ||
+                                                                (page >= savedPage - 1 && page <= savedPage + 1)
+                                                            ) {
+                                                                return (
+                                                                    <PaginationItem key={page}>
+                                                                        <PaginationLink
+                                                                            isActive={page === savedPage}
+                                                                            onClick={() => setSavedPage(page)}
+                                                                            className="cursor-pointer"
+                                                                        >
+                                                                            {page}
+                                                                        </PaginationLink>
+                                                                    </PaginationItem>
+                                                                );
+                                                            } else if (
+                                                                page === savedPage - 2 ||
+                                                                page === savedPage + 2
+                                                            ) {
+                                                                return <PaginationEllipsis key={page} />;
+                                                            }
+                                                            return null;
+                                                        })}
+
+                                                        <PaginationItem>
+                                                            <PaginationNext
+                                                                onClick={() => setSavedPage(p => Math.max(1, Math.min(savedData.last_page || 1, p + 1)))}
+                                                                className={cn("cursor-pointer", savedPage === (savedData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                            />
+                                                        </PaginationItem>
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                                            {savedType === 'place' ? (
+                                                <MapPin className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                            ) : (
+                                                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                            )}
+                                            <p>No saved {savedType}s found for this trip's provinces.</p>
+                                        </div>
+                                    )}
                                 </TabsContent>
                             </div>
                         </div>
-                    </Tabs>
-                </div>
-            </main>
-        </div>
+                    </Tabs >
+                </div >
+            </main >
+        </div >
     );
 }
 
