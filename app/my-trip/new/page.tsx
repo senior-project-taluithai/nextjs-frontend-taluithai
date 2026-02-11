@@ -5,33 +5,56 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar as CalendarIcon, ChevronRight } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { provinces } from "@/lib/mock-data";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { useProvinces } from "@/hooks/api/useProvinces";
+import { useCreateTrip } from "@/hooks/api/useTrips";
+import { toast } from "sonner";
 
 export default function CreateTripPage() {
     const router = useRouter();
     const [name, setName] = useState("");
     const [date, setDate] = useState<DateRange | undefined>();
-    const [provinceId, setProvinceId] = useState<string>("");
+    const [provinceIds, setProvinceIds] = useState<string[]>([]);
 
-    // Simulate API call and redirect
-    const handleSubmit = (e: React.FormEvent) => {
+    const { data: provinces, isLoading: provincesLoading } = useProvinces();
+    const createTrip = useCreateTrip();
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation (Basic)
-        if (!name || !date?.from || !date?.to || !provinceId) return;
+        // Validation
+        if (!name || !date?.from || !date?.to || provinceIds.length === 0) {
+            toast.error("Please fill in all required fields");
+            return;
+        }
 
-        // Simulate creation delay
-        // In real app: POST /api/trips -> gets ID -> redirect
-        const newTripId = Math.floor(Math.random() * 1000) + 2000;
-        router.push(`/my-trip/${newTripId}`);
+        try {
+            const newTrip = await createTrip.mutateAsync({
+                name,
+                start_date: format(date.from, "yyyy-MM-dd"),
+                end_date: format(date.to, "yyyy-MM-dd"),
+                province_ids: provinceIds.map(id => parseInt(id)),
+                status: "draft",
+            });
+
+            toast.success(`${name} has been created successfully!`);
+            router.push(`/my-trip/${newTrip.id}`);
+        } catch (error) {
+            console.error("Failed to create trip:", error);
+            toast.error("Failed to create trip. Please try again.");
+        }
     };
+
+    const provinceOptions = provinces?.map(p => ({
+        label: `${p.name_en} (${p.name})`,
+        value: p.id.toString(),
+    })) || [];
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-2xl min-h-screen">
@@ -104,24 +127,26 @@ export default function CreateTripPage() {
                         </div>
 
                         <div className="grid w-full items-center gap-1.5">
-                            <Label>Primary Destination (Province)</Label>
-                            <Select onValueChange={setProvinceId} value={provinceId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a province" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {provinces.map((p) => (
-                                        <SelectItem key={p.id} value={p.id.toString()}>
-                                            {p.name_en} ({p.name})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label>Provinces</Label>
+                            <MultiSelect
+                                options={provinceOptions}
+                                selected={provinceIds}
+                                onChange={setProvinceIds}
+                                placeholder={provincesLoading ? "Loading provinces..." : "Select provinces for your trip"}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Select one or more provinces you plan to visit
+                            </p>
                         </div>
                     </div>
 
-                    <Button type="submit" className="w-full" size="lg" disabled={!name || !date?.from || !date?.to || !provinceId}>
-                        Start Planning
+                    <Button
+                        type="submit"
+                        className="w-full"
+                        size="lg"
+                        disabled={!name || !date?.from || !date?.to || provinceIds.length === 0 || createTrip.isPending}
+                    >
+                        {createTrip.isPending ? "Creating..." : "Start Planning"}
                         <ChevronRight className="w-4 h-4 ml-2" />
                     </Button>
                 </form>

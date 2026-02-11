@@ -22,6 +22,7 @@ export interface PlaceDto {
   thumbnail_url: string;
   image_urls: string[];
   categories: string[];
+  province?: ProvinceDto;
 }
 
 export interface PlaceDetailDto extends PlaceDto {
@@ -45,6 +46,7 @@ export interface EventDto {
   thumbnail_url: string;
   image_urls: string[];
   categories: string[];
+  province?: ProvinceDto;
 }
 
 export interface EventDetailDto extends EventDto {
@@ -83,6 +85,7 @@ export interface TripDto {
   start_date: string; // ISO date
   end_date: string; // ISO date
   status: 'draft' | 'upcoming' | 'completed';
+  provinces: ProvinceDto[]; // Updated to include provinces array
 }
 
 export interface TripDetailDto extends TripDto {
@@ -104,12 +107,9 @@ export interface TripItem {
   order: number;
   start_time?: string; // HH:mm
   end_time?: string;   // HH:mm
-}
-
-export interface TripProvince {
-    trip_province_id: number;
-    trip_id: number;
-    province_id: number;
+  // Enriched fields
+  place?: PlaceDto;
+  event?: EventDto;
 }
 
 // --- Mock Data ---
@@ -527,7 +527,7 @@ export const trips: TripDetailDto[] = [
     start_date: "2024-12-20",
     end_date: "2024-12-25",
     status: 'draft',
-    // Mocking the days. Note: Province info is no longer in TripDto, derived from contents or via TripProvince relation which we don't fully mock here yet but UI might need logic.
+    provinces: [provinces[0]], // Chiang Mai
     TripDays: [
       { id: 1, day_number: 1, date: "2024-12-20", items: [] },
       { id: 2, day_number: 2, date: "2024-12-21", items: [] },
@@ -536,10 +536,11 @@ export const trips: TripDetailDto[] = [
   {
     id: 1002,
     user_id: "user_1",
-    name: "Phuket Beach Getaway",
+    name: "Southern Thailand Beach Tour",
     start_date: "2024-11-10",
     end_date: "2024-11-12",
     status: 'upcoming',
+    provinces: [provinces[1], provinces[4]], // Phuket and Krabi
     TripDays: [
        { id: 3, day_number: 1, date: "2024-11-10", items: [{ id: 1, place_id: 102, order: 1, start_time: "10:00", end_time: "12:00" }] },
     ]
@@ -551,14 +552,7 @@ export const trips: TripDetailDto[] = [
     start_date: "2023-05-10",
     end_date: "2023-05-11",
     status: 'completed',
+    provinces: [provinces[2]], // Bangkok
     TripDays: []
   }
-];
-
-// Helper to bridge the gap for UI that expects a single province per trip logic from the mock
-// In the real app, this would be a query. 
-export const tripProvinces: TripProvince[] = [
-    { trip_province_id: 1, trip_id: 1001, province_id: 1 },
-    { trip_province_id: 2, trip_id: 1002, province_id: 2 },
-    { trip_province_id: 3, trip_id: 1003, province_id: 3 },
 ];
