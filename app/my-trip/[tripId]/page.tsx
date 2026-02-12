@@ -58,6 +58,9 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useDeleteTrip } from "@/hooks/api/useTrips";
+import { TripFilters } from "@/components/my-trip/trip-filters";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SlidersHorizontal } from "lucide-react";
 
 const RecommendationSection = ({ title, icon: Icon, items, type, onAdd, checkIsAdded }: any) => {
     if (!items || items.length === 0) return null;
@@ -94,8 +97,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Filter States for "All Places"
-    const [searchText, setSearchText] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState<string>("");
+    const [filters, setFilters] = useState<any>({});
     const [placesPage, setPlacesPage] = useState(1);
     const [eventsPage, setEventsPage] = useState(1);
     const [savedPage, setSavedPage] = useState(1);
@@ -103,6 +105,18 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const [recommendationsPage, setRecommendationsPage] = useState(1);
     const ITEMS_PER_PAGE = 8;
     const RECOMMENDATIONS_PER_PAGE = 8;
+
+    const handleSetFilters = (updater: any) => {
+        setFilters((prev: any) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            // Reset pagination if filters change (except page itself if we were storing it there, but we are not)
+            if (JSON.stringify(prev) !== JSON.stringify(next)) {
+                setPlacesPage(1);
+                setEventsPage(1);
+            }
+            return next;
+        });
+    };
 
     // Load trip data from API
     const { data: trip, isLoading: tripLoading, error: tripError } = useTrip(parseInt(tripId));
@@ -115,22 +129,15 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     );
 
     // Load places with filters
-    // Load places with filters
     const { data: placesData, isLoading: placesLoading } = useTripPlaces(
         parseInt(tripId),
-        placesPage,
-        ITEMS_PER_PAGE,
-        searchText,
-        selectedCategory
+        { ...filters, page: placesPage, limit: ITEMS_PER_PAGE }
     );
 
     // Load events
     const { data: eventsData, isLoading: eventsLoading } = useTripEvents(
         parseInt(tripId),
-        eventsPage,
-        ITEMS_PER_PAGE,
-        searchText,
-        selectedCategory
+        { ...filters, page: eventsPage, limit: ITEMS_PER_PAGE }
     );
 
     // Load saved items
@@ -167,10 +174,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const reorderItemMutation = useReorderTripDayItems();
     const deleteTripMutation = useDeleteTrip();
 
-    // Reset pagination when filters change
-    useEffect(() => {
-        setPlacesPage(1);
-    }, [searchText, selectedCategory]);
+
 
     // No more mock data - use only real API data
     // Recommendations come from useTripRecommendedPlaces
@@ -542,40 +546,48 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                         </div>
 
                                         {/* Search and Filter Bar */}
-                                        <div className="flex flex-col gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm">
-                                            <div className="relative">
+                                        <div className="flex gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm items-center sticky">
+                                            <div className="relative flex-1">
                                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     placeholder="Search places..."
                                                     className="pl-9 bg-background"
-                                                    value={searchText}
-                                                    onChange={(e) => setSearchText(e.target.value)}
+                                                    value={filters.search || ""}
+                                                    onChange={(e) => handleSetFilters((prev: any) => ({ ...prev, search: e.target.value }))}
                                                 />
-                                                {searchText && (
+                                                {filters.search && (
                                                     <button
-                                                        onClick={() => setSearchText("")}
+                                                        onClick={() => handleSetFilters((prev: any) => ({ ...prev, search: "" }))}
                                                         className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
                                                     >
                                                         <X className="w-4 h-4" />
                                                     </button>
                                                 )}
                                             </div>
-                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                                {categories.map(cat => (
-                                                    <button
-                                                        key={cat}
-                                                        onClick={() => setSelectedCategory(cat)}
-                                                        className={cn(
-                                                            "px-3 py-1.5 text-xs rounded-full border whitespace-nowrap transition-colors font-medium",
-                                                            selectedCategory === cat
-                                                                ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                                                                : "bg-background hover:bg-muted"
+
+                                            <Sheet>
+                                                <SheetTrigger asChild>
+                                                    <Button variant="outline" size="icon" className="shrink-0 relative">
+                                                        <SlidersHorizontal className="h-4 w-4" />
+                                                        {Object.keys(filters).filter(k => k !== 'search' && k !== 'page' && filters[k]).length > 0 && (
+                                                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full border-2 border-background" />
                                                         )}
-                                                    >
-                                                        {cat}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                                    </Button>
+                                                </SheetTrigger>
+                                                <SheetContent side="right" className="w-full sm:w-[400px] overflow-y-auto">
+                                                    <SheetHeader>
+                                                        <SheetTitle>Filters</SheetTitle>
+                                                    </SheetHeader>
+                                                    <div className="mt-6">
+                                                        <TripFilters
+                                                            filters={filters}
+                                                            setFilters={handleSetFilters}
+                                                            tripProvinces={trip.provinces || []}
+                                                            activeTab="place"
+                                                        />
+                                                    </div>
+                                                </SheetContent>
+                                            </Sheet>
                                         </div>
 
                                         {/* Results Grid (4 cols max) */}
@@ -651,6 +663,51 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                 </TabsContent>
 
                                 <TabsContent value="events" className="mt-0 space-y-6">
+                                    {/* Search and Filter Bar for Events */}
+                                    <div className="flex gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm items-center sticky">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Search events..."
+                                                className="pl-9 bg-background"
+                                                value={filters.search || ""}
+                                                onChange={(e) => handleSetFilters((prev: any) => ({ ...prev, search: e.target.value }))}
+                                            />
+                                            {filters.search && (
+                                                <button
+                                                    onClick={() => handleSetFilters((prev: any) => ({ ...prev, search: "" }))}
+                                                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <Sheet>
+                                            <SheetTrigger asChild>
+                                                <Button variant="outline" size="icon" className="shrink-0 relative">
+                                                    <SlidersHorizontal className="h-4 w-4" />
+                                                    {Object.keys(filters).filter(k => k !== 'search' && k !== 'page' && filters[k]).length > 0 && (
+                                                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full border-2 border-background" />
+                                                    )}
+                                                </Button>
+                                            </SheetTrigger>
+                                            <SheetContent side="right" className="w-full sm:w-[400px] overflow-y-auto">
+                                                <SheetHeader>
+                                                    <SheetTitle>Filters</SheetTitle>
+                                                </SheetHeader>
+                                                <div className="mt-6">
+                                                    <TripFilters
+                                                        filters={filters}
+                                                        setFilters={handleSetFilters}
+                                                        tripProvinces={trip.provinces || []}
+                                                        activeTab="event"
+                                                    />
+                                                </div>
+                                            </SheetContent>
+                                        </Sheet>
+                                    </div>
+
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 text-blue-800">
                                         <Clock className="w-5 h-5 mt-0.5 shrink-0" />
                                         <div>

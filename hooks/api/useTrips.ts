@@ -156,19 +156,26 @@ const tripExtendedApi = {
   },
 
   // Places in trip provinces
-  // Places in trip provinces
   getPlacesInTripProvinces: async (
     tripId: number,
-    page: number = 1,
-    limit: number = 8,
-    search?: string,
-    category?: string,
+    filters: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      category?: string;
+      provinceIds?: number[];
+      minRating?: number;
+      bestSeason?: string[];
+    }
   ) => {
     const response = await api.post<PaginatedResult<any>>(`/trips/${tripId}/places`, {
-      page,
-      limit,
-      search,
-      category_id: category,
+      page: filters.page || 1,
+      limit: filters.limit || 8,
+      search: filters.search,
+      category_id: filters.category,
+      province_ids: filters.provinceIds,
+      min_rating: filters.minRating,
+      best_season: filters.bestSeason,
     });
     return response.data;
   },
@@ -202,16 +209,22 @@ const tripExtendedApi = {
   // Events in trip provinces
   getEventsInTripProvinces: async (
     tripId: number,
-    page: number = 1,
-    limit: number = 8,
-    search?: string,
-    category?: string,
+    filters: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      category?: string;
+      provinceIds?: number[];
+      minRating?: number;
+    }
   ) => {
     const response = await api.post<PaginatedResult<any>>(`/trips/${tripId}/events`, {
-      page,
-      limit,
-      search,
-      category_id: category,
+      page: filters.page || 1,
+      limit: filters.limit || 8,
+      search: filters.search,
+      category_id: filters.category,
+      province_ids: filters.provinceIds,
+      min_rating: filters.minRating,
     });
     return response.data;
   },
@@ -250,14 +263,19 @@ export function useTripRecommendedEvents(tripId: number, page: number = 1, limit
 // Places filtering hook
 export function useTripPlaces(
   tripId: number,
-  page: number = 1,
-  limit: number = 8,
-  search?: string,
-  category?: string,
+  filters: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    category?: string;
+    provinceIds?: number[];
+    minRating?: number;
+    bestSeason?: string[];
+  }
 ) {
   return useQuery({
-    queryKey: ['trips', tripId, 'places', page, limit, search, category],
-    queryFn: () => tripExtendedApi.getPlacesInTripProvinces(tripId, page, limit, search, category),
+    queryKey: ['trips', tripId, 'places', filters],
+    queryFn: () => tripExtendedApi.getPlacesInTripProvinces(tripId, filters),
     enabled: !!tripId,
   });
 }
@@ -344,14 +362,18 @@ export function useReorderTripDayItems() {
 // Events filtering hook
 export function useTripEvents(
   tripId: number,
-  page: number = 1,
-  limit: number = 8,
-  search?: string,
-  category?: string,
+  filters: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    category?: string;
+    provinceIds?: number[];
+    minRating?: number;
+  }
 ) {
   return useQuery({
-    queryKey: ['trips', tripId, 'events', page, limit, search, category],
-    queryFn: () => tripExtendedApi.getEventsInTripProvinces(tripId, page, limit, search, category),
+    queryKey: ['trips', tripId, 'events', filters],
+    queryFn: () => tripExtendedApi.getEventsInTripProvinces(tripId, filters),
     enabled: !!tripId,
   });
 }
