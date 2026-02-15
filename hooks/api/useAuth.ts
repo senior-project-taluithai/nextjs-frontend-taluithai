@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { authService } from "@/lib/auth";
+import { authService } from "@/lib/services/auth";
 import { LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from "@/lib/dtos/auth.dto";
 
 export const useLoginMutation = () => {

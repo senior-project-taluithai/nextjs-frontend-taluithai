@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { eventService } from "@/lib/event";
+import { eventService } from "@/lib/services/event";
 import { CreateEventDto } from "@/lib/dtos/event.dto";
 
 export const useEvents = () => {

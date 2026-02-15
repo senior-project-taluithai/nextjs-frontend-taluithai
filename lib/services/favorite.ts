@@ -1,7 +1,7 @@
-import { api } from './api-client';
-import { Place } from './dtos/place.dto';
-import { Event } from './dtos/event.dto';
-import { PaginatedResponse } from './dtos/pagination.dto';
+import { api } from '../api-client';
+import { Place } from '../dtos/place.dto';
+import { Event } from '../dtos/event.dto';
+import { PaginatedResponse } from '../dtos/pagination.dto';
 
 export const favoriteService = {
   getFavoritePlaces: async (page = 1, pageSize = 10): Promise<PaginatedResponse<Place>> => {

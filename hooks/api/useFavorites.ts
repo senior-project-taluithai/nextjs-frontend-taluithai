@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { favoriteService } from "@/lib/favorite";
+import { favoriteService } from "@/lib/services/favorite";
 
 export const useFavoritePlaces = (page: number = 1, pageSize: number = 10) => {
   return useQuery({

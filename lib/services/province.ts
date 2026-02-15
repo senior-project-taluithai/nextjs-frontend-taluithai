@@ -1,5 +1,5 @@
-import { api } from './api-client';
-import { Province, CreateProvinceDto } from './dtos/province.dto';
+import { api } from '../api-client';
+import { Province, CreateProvinceDto } from '../dtos/province.dto';
 
 export const provinceService = {
   getAll: async (): Promise<Province[]> => {

@@ -1,5 +1,5 @@
-import { api } from './api-client';
-import { Place } from './dtos/place.dto';
+import { api } from '../api-client';
+import { Place } from '../dtos/place.dto';
 
 export const placeService = {
   getRecommended: async (): Promise<Place[]> => {
@@ -17,8 +17,8 @@ export const placeService = {
     return response.data;
   },
 
-  explore: async (query: import('./dtos/place.dto').ExplorePlacesQuery): Promise<import('./dtos/pagination.dto').PaginatedResponse<Place>> => {
-    const response = await api.post<import('./dtos/pagination.dto').PaginatedResponse<Place>>('/places/explore', query);
+  explore: async (query: import('../dtos/place.dto').ExplorePlacesQuery): Promise<import('../dtos/pagination.dto').PaginatedResponse<Place>> => {
+    const response = await api.post<import('../dtos/pagination.dto').PaginatedResponse<Place>>('/places/explore', query);
     return response.data;
   },
 
