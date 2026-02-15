@@ -115,7 +115,7 @@ export default function ExplorePage() {
     const meta = {
         total: Number(currentData?.total) || 0,
         page: Number(currentData?.page) || 1,
-        lastPage: Number(currentData?.lastPage) || 1,
+        lastPage: Number(currentData?.last_page) || 1,
     };
 
     // Handle Page Change

@@ -10,6 +10,8 @@ import dynamic from "next/dynamic";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { useRecommendedPlaces, usePopularPlaces, useBestForSeasonPlaces } from "@/hooks/api/usePlaces";
 import { useUpcomingEvents } from "@/hooks/api/useEvents";
+import { placeService } from "@/lib/services/place";
+import { eventService } from "@/lib/services/event";
 import { Place } from "@/lib/dtos/place.dto";
 import { Event } from "@/lib/dtos/event.dto";
 import { Province } from "@/lib/dtos/province.dto";

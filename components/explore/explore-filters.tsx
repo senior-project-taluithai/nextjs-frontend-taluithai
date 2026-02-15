@@ -13,6 +13,8 @@ import {
     AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { categoryService } from "@/lib/services/category";
+import { provinceService } from "@/lib/services/province";
 import { X, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useProvinces } from "@/hooks/api/useProvinces";

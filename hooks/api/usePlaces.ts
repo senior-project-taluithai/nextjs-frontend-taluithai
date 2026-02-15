@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { placeService } from "@/lib/place";
+import { placeService } from "@/lib/services/place";
 
 export const usePlaces = () => {
   return useQuery({

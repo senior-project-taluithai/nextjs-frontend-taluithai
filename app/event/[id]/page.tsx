@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, Heart, Share2, Clock, Star, Info } from "lucide-react";
 import { notFound } from "next/navigation";
+import { eventService } from "@/lib/services/event";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { useEvent } from "@/hooks/api/useEvents";

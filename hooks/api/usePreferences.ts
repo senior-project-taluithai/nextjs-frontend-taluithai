@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { authService } from "@/lib/auth";
+import { authService } from "@/lib/services/auth";
 import { UpdateUserPreferencesDto } from "@/lib/dtos/user.dto";
 
 export const useAllTravelPreferences = () => {

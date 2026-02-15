@@ -1,5 +1,5 @@
-import { api } from './api-client';
-import { Event, CreateEventDto } from './dtos/event.dto';
+import { api } from '../api-client';
+import { Event, CreateEventDto } from '../dtos/event.dto';
 
 export const eventService = {
   getAll: async (): Promise<Event[]> => {
@@ -12,8 +12,8 @@ export const eventService = {
     return response.data;
   },
 
-  explore: async (query: import('./dtos/event.dto').ExploreEventsQuery): Promise<import('./dtos/pagination.dto').PaginatedResponse<Event>> => {
-    const response = await api.post<import('./dtos/pagination.dto').PaginatedResponse<Event>>('/events/explore', query);
+  explore: async (query: import('../dtos/event.dto').ExploreEventsQuery): Promise<import('../dtos/pagination.dto').PaginatedResponse<Event>> => {
+    const response = await api.post<import('../dtos/pagination.dto').PaginatedResponse<Event>>('/events/explore', query);
     return response.data;
   },
 

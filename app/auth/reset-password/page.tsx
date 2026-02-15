@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, Suspense } from 'react';
-import { authService } from '@/lib/auth';
+import { useResetPasswordMutation } from "@/hooks/api/useAuth";
+import { authService } from "@/lib/services/auth";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

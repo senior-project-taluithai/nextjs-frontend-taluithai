@@ -7,12 +7,12 @@ import {
     ResetPasswordDto,
     ChangePasswordDto,
     AuthResponse
-} from './dtos/auth.dto';
+} from '../dtos/auth.dto';
 import {
     UserProfile,
     TravelPreference,
     UpdateUserPreferencesDto
-} from './dtos/user.dto';
+} from '../dtos/user.dto';
 
 // Re-export for compatibility
 export type {
@@ -27,7 +27,7 @@ export type {
     UpdateUserPreferencesDto
 };
 
-import { api } from './api-client';
+import { api } from '../api-client';
 
 // --- API Service ---
 

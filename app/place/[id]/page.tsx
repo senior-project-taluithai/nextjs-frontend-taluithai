@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Heart, Share2, Info } from "lucide-react";
 import { notFound } from "next/navigation";
+import { placeService } from "@/lib/services/place";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { usePlace } from "@/hooks/api/usePlaces";

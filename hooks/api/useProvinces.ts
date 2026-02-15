@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { provinceService } from "@/lib/province";
+import { provinceService } from "@/lib/services/province";
 import { CreateProvinceDto } from "@/lib/dtos/province.dto";
 
 export const useProvinces = () => {

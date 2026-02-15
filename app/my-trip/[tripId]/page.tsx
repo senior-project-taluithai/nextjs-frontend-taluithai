@@ -19,8 +19,25 @@ import {
     useTripSavedItems,
     useAddTripDayItem,
     useRemoveTripDayItem,
-    useUpdateTripDayItem
+    useUpdateTripDayItem,
+    useReorderTripDayItems
 } from "@/hooks/api/useTrips";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { TripTimelineItem } from '@/components/my-trip/trip-timeline-item';
 import { toast } from "sonner";
 
 // Dynamically import TripMap to avoid SSR issues
@@ -41,6 +58,9 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useDeleteTrip } from "@/hooks/api/useTrips";
+import { TripFilters } from "@/components/my-trip/trip-filters";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SlidersHorizontal } from "lucide-react";
 
 const RecommendationSection = ({ title, icon: Icon, items, type, onAdd, checkIsAdded }: any) => {
     if (!items || items.length === 0) return null;
@@ -71,13 +91,13 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const { tripId } = use(params);
     const router = useRouter();
     const [selectedDay, setSelectedDay] = useState<number>(1);
+    const [orderedItems, setOrderedItems] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>("places");
     const [isEditTripOpen, setIsEditTripOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Filter States for "All Places"
-    const [searchText, setSearchText] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState<string>("");
+    const [filters, setFilters] = useState<any>({});
     const [placesPage, setPlacesPage] = useState(1);
     const [eventsPage, setEventsPage] = useState(1);
     const [savedPage, setSavedPage] = useState(1);
@@ -85,6 +105,18 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const [recommendationsPage, setRecommendationsPage] = useState(1);
     const ITEMS_PER_PAGE = 8;
     const RECOMMENDATIONS_PER_PAGE = 8;
+
+    const handleSetFilters = (updater: any) => {
+        setFilters((prev: any) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            // Reset pagination if filters change (except page itself if we were storing it there, but we are not)
+            if (JSON.stringify(prev) !== JSON.stringify(next)) {
+                setPlacesPage(1);
+                setEventsPage(1);
+            }
+            return next;
+        });
+    };
 
     // Load trip data from API
     const { data: trip, isLoading: tripLoading, error: tripError } = useTrip(parseInt(tripId));
@@ -97,22 +129,15 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     );
 
     // Load places with filters
-    // Load places with filters
     const { data: placesData, isLoading: placesLoading } = useTripPlaces(
         parseInt(tripId),
-        placesPage,
-        ITEMS_PER_PAGE,
-        searchText,
-        selectedCategory
+        { ...filters, page: placesPage, limit: ITEMS_PER_PAGE }
     );
 
     // Load events
     const { data: eventsData, isLoading: eventsLoading } = useTripEvents(
         parseInt(tripId),
-        eventsPage,
-        ITEMS_PER_PAGE,
-        searchText,
-        selectedCategory
+        { ...filters, page: eventsPage, limit: ITEMS_PER_PAGE }
     );
 
     // Load saved items
@@ -146,25 +171,62 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
     const addItemMutation = useAddTripDayItem();
     const removeItemMutation = useRemoveTripDayItem();
     const updateItemMutation = useUpdateTripDayItem();
+    const reorderItemMutation = useReorderTripDayItems();
     const deleteTripMutation = useDeleteTrip();
 
-    // Reset pagination when filters change
-    useEffect(() => {
-        setPlacesPage(1);
-    }, [searchText, selectedCategory]);
+
 
     // No more mock data - use only real API data
     // Recommendations come from useTripRecommendedPlaces
     // Places come from useTripPlaces
     // Events would need a separate hook (not implemented yet)
 
-    // Sort trip days by day_number
     const sortedDays = useMemo(() => {
         if (!trip?.TripDays) return [];
         return [...trip.TripDays].sort((a, b) => a.day_number - b.day_number);
     }, [trip?.TripDays]);
 
     const currentDay = sortedDays.find(d => d.day_number === selectedDay);
+
+    useEffect(() => {
+        if (currentDay?.items) {
+            setOrderedItems(currentDay.items);
+        }
+    }, [currentDay]);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (active.id !== over?.id && currentDay) {
+            setOrderedItems((items) => {
+                const oldIndex = items.findIndex((item) => item.id === active.id);
+                const newIndex = items.findIndex((item) => item.id === over?.id);
+
+                const newItems = arrayMove(items, oldIndex, newIndex);
+
+                // Call API to reorder
+                reorderItemMutation.mutate({
+                    tripId: parseInt(tripId),
+                    dayNumber: selectedDay,
+                    items: {
+                        items: newItems.map((item, index) => ({
+                            id: item.id,
+                            order: index + 1 // 1-based index
+                        }))
+                    }
+                });
+
+                return newItems;
+            });
+        }
+    };
 
     // Collect all items for the map
     const mapItems = useMemo(() => {
@@ -398,84 +460,29 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                 <p className="text-xs opacity-70">Add from map or suggestions</p>
                             </div>
                         ) : (
-                            currentDay?.items.map((item, index) => {
-                                // Backend doesn't include full place/event details yet
-                                // Show basic info using IDs for now
-                                const type = item.place_id ? 'place' : 'event';
-                                const itemId = item.place_id || item.event_id;
-                                const itemDetails = item.place || item.event;
-                                const name = itemDetails ? (itemDetails.name_en || itemDetails.name) : `${type === 'place' ? 'Place' : 'Event'} #${itemId}`;
-                                const imageUrl = itemDetails?.thumbnail_url;
-
-                                return (
-                                    <div key={item.id} className="relative group bg-white dark:bg-slate-800 p-3 rounded-lg border shadow-sm flex gap-3">
-                                        {/* Timeline Connector */}
-                                        {index !== (currentDay.items.length - 1) && (
-                                            <div className="absolute left-[1.65rem] top-10 bottom-[-1rem] w-0.5 bg-slate-200 dark:bg-slate-700 -z-10" />
-                                        )}
-
-                                        {/* Order Indicator */}
-                                        <div className="flex flex-col items-center gap-1 min-w-[3rem]">
-                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${type === 'place' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
-                                                {index + 1}
-                                            </div>
-                                            {/* Thumbnail if available */}
-                                            {imageUrl && (
-                                                <div className="w-10 h-10 rounded-md overflow-hidden mt-1 shadow-sm">
-                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start">
-                                                <h4 className="font-semibold text-sm truncate pr-6" title={name}>
-                                                    {name}
-                                                </h4>
-                                                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 uppercase">
-                                                    {type}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                                                <MapPin className="w-3 h-3" />
-                                                {item.note || (itemDetails?.province?.name_en || 'No details available')}
-                                            </p>
-
-                                            {/* Time Inputs */}
-                                            <div className="flex items-center gap-2 mt-3 w-full">
-                                                <div className="relative flex-1">
-                                                    <Clock className="absolute left-2 top-1.5 w-3 h-3 text-muted-foreground" />
-                                                    <Input
-                                                        type="time"
-                                                        className="h-6 text-xs pl-6"
-                                                        value={item.start_time || ""}
-                                                        onChange={(e) => handleTimeChange(item.id, 'start_time', e.target.value)}
-                                                    />
-                                                </div>
-                                                <span className="text-xs text-muted-foreground">-</span>
-                                                <div className="relative flex-1">
-                                                    <Input
-                                                        type="time"
-                                                        className="h-6 text-xs px-1 text-center"
-                                                        value={item.end_time || ""}
-                                                        onChange={(e) => handleTimeChange(item.id, 'end_time', e.target.value)}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Remove Button */}
-                                            <button
-                                                onClick={() => handleRemoveFromDay(item.id)}
-                                                className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <SortableContext
+                                    items={orderedItems.map(i => i.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="space-y-3">
+                                        {orderedItems.map((item, index) => (
+                                            <TripTimelineItem
+                                                key={item.id}
+                                                item={item}
+                                                index={index}
+                                                isLast={index === orderedItems.length - 1}
+                                                onRemove={handleRemoveFromDay}
+                                                onTimeChange={handleTimeChange}
+                                            />
+                                        ))}
                                     </div>
-                                );
-                            })
+                                </SortableContext>
+                            </DndContext>
                         )}
                     </div>
                 </div>
@@ -539,40 +546,48 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                         </div>
 
                                         {/* Search and Filter Bar */}
-                                        <div className="flex flex-col gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm">
-                                            <div className="relative">
+                                        <div className="flex gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm items-center sticky">
+                                            <div className="relative flex-1">
                                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     placeholder="Search places..."
                                                     className="pl-9 bg-background"
-                                                    value={searchText}
-                                                    onChange={(e) => setSearchText(e.target.value)}
+                                                    value={filters.search || ""}
+                                                    onChange={(e) => handleSetFilters((prev: any) => ({ ...prev, search: e.target.value }))}
                                                 />
-                                                {searchText && (
+                                                {filters.search && (
                                                     <button
-                                                        onClick={() => setSearchText("")}
+                                                        onClick={() => handleSetFilters((prev: any) => ({ ...prev, search: "" }))}
                                                         className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
                                                     >
                                                         <X className="w-4 h-4" />
                                                     </button>
                                                 )}
                                             </div>
-                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                                {categories.map(cat => (
-                                                    <button
-                                                        key={cat}
-                                                        onClick={() => setSelectedCategory(cat)}
-                                                        className={cn(
-                                                            "px-3 py-1.5 text-xs rounded-full border whitespace-nowrap transition-colors font-medium",
-                                                            selectedCategory === cat
-                                                                ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                                                                : "bg-background hover:bg-muted"
+
+                                            <Sheet>
+                                                <SheetTrigger asChild>
+                                                    <Button variant="outline" size="icon" className="shrink-0 relative">
+                                                        <SlidersHorizontal className="h-4 w-4" />
+                                                        {Object.keys(filters).filter(k => k !== 'search' && k !== 'page' && filters[k]).length > 0 && (
+                                                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full border-2 border-background" />
                                                         )}
-                                                    >
-                                                        {cat}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                                    </Button>
+                                                </SheetTrigger>
+                                                <SheetContent side="right" className="w-full sm:w-[400px] overflow-y-auto">
+                                                    <SheetHeader>
+                                                        <SheetTitle>Filters</SheetTitle>
+                                                    </SheetHeader>
+                                                    <div className="mt-6">
+                                                        <TripFilters
+                                                            filters={filters}
+                                                            setFilters={handleSetFilters}
+                                                            tripProvinces={trip.provinces || []}
+                                                            activeTab="place"
+                                                        />
+                                                    </div>
+                                                </SheetContent>
+                                            </Sheet>
                                         </div>
 
                                         {/* Results Grid (4 cols max) */}
@@ -648,6 +663,51 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                 </TabsContent>
 
                                 <TabsContent value="events" className="mt-0 space-y-6">
+                                    {/* Search and Filter Bar for Events */}
+                                    <div className="flex gap-3 top-0 bg-slate-50/95 dark:bg-slate-900/95 py-3 z-10 backdrop-blur-sm -mx-4 px-4 border-b shadow-sm items-center sticky">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Search events..."
+                                                className="pl-9 bg-background"
+                                                value={filters.search || ""}
+                                                onChange={(e) => handleSetFilters((prev: any) => ({ ...prev, search: e.target.value }))}
+                                            />
+                                            {filters.search && (
+                                                <button
+                                                    onClick={() => handleSetFilters((prev: any) => ({ ...prev, search: "" }))}
+                                                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <Sheet>
+                                            <SheetTrigger asChild>
+                                                <Button variant="outline" size="icon" className="shrink-0 relative">
+                                                    <SlidersHorizontal className="h-4 w-4" />
+                                                    {Object.keys(filters).filter(k => k !== 'search' && k !== 'page' && filters[k]).length > 0 && (
+                                                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full border-2 border-background" />
+                                                    )}
+                                                </Button>
+                                            </SheetTrigger>
+                                            <SheetContent side="right" className="w-full sm:w-[400px] overflow-y-auto">
+                                                <SheetHeader>
+                                                    <SheetTitle>Filters</SheetTitle>
+                                                </SheetHeader>
+                                                <div className="mt-6">
+                                                    <TripFilters
+                                                        filters={filters}
+                                                        setFilters={handleSetFilters}
+                                                        tripProvinces={trip.provinces || []}
+                                                        activeTab="event"
+                                                    />
+                                                </div>
+                                            </SheetContent>
+                                        </Sheet>
+                                    </div>
+
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 text-blue-800">
                                         <Clock className="w-5 h-5 mt-0.5 shrink-0" />
                                         <div>
