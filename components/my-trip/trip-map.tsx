@@ -7,6 +7,23 @@ import L from "leaflet";
 import { Star } from "lucide-react";
 import Image from "next/image";
 
+const ALLOWED_IMAGE_HOSTNAMES = new Set([,
+    "lh3.googleusercontent.com",
+    "streetviewpixels-pa.googleapis.com",
+    "images.unsplash.com",
+    "picsum.photos",
+    "fastly.picsum.photos",
+]);
+
+function isAllowedImageUrl(url: string): boolean {
+    try {
+        const u = new URL(url);
+        return u.protocol === "https:" && ALLOWED_IMAGE_HOSTNAMES.has(u.hostname);
+    } catch {
+        return false;
+    }
+}
+
 // Leaflet Icons
 const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png';
 
@@ -145,6 +162,10 @@ export default function TripMap({ items, center = [13.7563, 100.5018], zoom = 10
                 const icon = getMarkerIcon(item);
                 const label = getCategoryLabel(item);
                 const imageUrl = item.thumbnail_url;
+                const safeImageUrl =
+                    typeof imageUrl === "string" && isAllowedImageUrl(imageUrl)
+                        ? imageUrl
+                        : null;
 
                 return (
                     <Marker
@@ -154,10 +175,10 @@ export default function TripMap({ items, center = [13.7563, 100.5018], zoom = 10
                     >
                         <Popup className="min-w-50">
                             <div className="flex flex-col gap-2">
-                                {imageUrl && (
+                                {safeImageUrl && (
                                     <div className="relative w-full h-24 rounded-lg overflow-hidden bg-slate-100">
                                         <Image
-                                            src={imageUrl}
+                                            src={safeImageUrl}
                                             alt={item.name_en || item.name}
                                             fill
                                             className="object-cover"

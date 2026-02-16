@@ -310,6 +310,30 @@ function findTripObject(obj: Record<string, unknown>): PlannedTrip | null {
   return null;
 }
 
+/**
+ * Allowed image hostnames — only trust URLs from our own data sources.
+ */
+const ALLOWED_IMAGE_HOSTNAMES = new Set([
+  "lh3.googleusercontent.com",
+  "streetviewpixels-pa.googleapis.com",
+  "images.unsplash.com",
+  "picsum.photos",
+  "fastly.picsum.photos",
+]);
+
+function sanitizeThumbnailUrl(url: unknown): string | undefined {
+  if (typeof url !== "string" || !url) return undefined;
+  try {
+    const u = new URL(url);
+    if (u.protocol === "https:" && ALLOWED_IMAGE_HOSTNAMES.has(u.hostname)) {
+      return url;
+    }
+  } catch {
+    // invalid URL
+  }
+  return undefined;
+}
+
 function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
   const days = parsed.days as Record<string, unknown>[];
   return {
@@ -329,7 +353,7 @@ function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
             pg_place_id: item.pg_place_id as number | undefined,
             rating: item.rating as number | undefined,
             category: item.category as string | undefined,
-            thumbnail_url: item.thumbnail_url as string | undefined,
+            thumbnail_url: sanitizeThumbnailUrl(item.thumbnail_url),
           }))
         : [],
     })),
