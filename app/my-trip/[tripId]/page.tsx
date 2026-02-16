@@ -244,7 +244,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                 rating: detail.rating,
                 thumbnail_url: detail.thumbnail_url
             };
-        }).filter(item => item !== null && item.latitude && item.longitude);
+        }).filter((item): item is NonNullable<typeof item> => item !== null && !!item.latitude && !!item.longitude);
     }, [currentDay]);
 
 

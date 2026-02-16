@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
         hostname: 'fastly.picsum.photos',
         port: '',
       },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+      },
+      {
+        protocol: 'https',
+        hostname: 'streetviewpixels-pa.googleapis.com',
+        port: '',
+      },
     ],
   },
 };
