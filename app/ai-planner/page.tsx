@@ -180,24 +180,24 @@ function TypewriterMessage({ text }: { text: string }) {
 }
 
 const SUGGESTIONS = [
-    "วางแผนทริปเชียงใหม่ 3 วัน เน้นวัดและธรรมชาติ",
-    "แนะนำที่เที่ยวภูเก็ต สำหรับครอบครัว",
-    "ทริปกระบี่ 2 วัน งบ 5000 บาท",
-    "เที่ยวเชียงราย เน้นคาเฟ่และวิวสวยๆ",
+    "Plan a 3-day Chiang Mai trip focusing on temples and nature",
+    "Recommend places in Phuket for families",
+    "2-day Krabi trip with a 5,000 THB budget",
+    "Explore Chiang Rai — cafes and scenic views",
 ];
 
 // Map our ToolCall state to shadcn Tool component
 const TOOL_LABELS: Record<string, string> = {
     // Sub-agent tools (high-level)
-    recommend_places: "กำลังค้นหาสถานที่แนะนำ",
-    plan_trip: "กำลังวางแผนทริป",
-    estimate_budget: "กำลังคำนวณงบประมาณ",
-    optimize_route: "กำลังคำนวณเส้นทาง",
-    find_events: "กำลังค้นหาเทศกาล/กิจกรรม",
-    webSearch: "กำลังค้นหาข้อมูลจากเว็บ",
+    recommend_places: "Searching for recommended places",
+    plan_trip: "Planning your trip",
+    estimate_budget: "Estimating budget",
+    optimize_route: "Calculating route",
+    find_events: "Searching for festivals & events",
+    webSearch: "Searching the web",
     // Graph nodes
-    agent: "กำลังประมวลผล",
-    tools: "กำลังเรียกใช้เครื่องมือ",
+    agent: "Processing",
+    tools: "Running tools",
 };
 
 function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
@@ -365,7 +365,7 @@ export default function AIPlannerPage() {
                         {messages.length === 0 ? (
                             <ConversationEmptyState
                                 title="TaluiThai AI"
-                                description="บอกได้เลยว่าอยากไปเที่ยวที่ไหน กี่วัน งบเท่าไหร่ แล้วผมจะช่วยวางแผนให้ครับ!"
+                                description="Tell me where you want to go, how many days, and your budget — I'll help plan your trip!"
                                 icon={<MapPin className="h-8 w-8" />}
                             />
                         ) : (
@@ -391,17 +391,17 @@ export default function AIPlannerPage() {
                                                         !cleanText && !msg.toolCalls?.length ? (
                                                             <div className="flex items-center gap-2 text-muted-foreground">
                                                                 <Loader size={16} />
-                                                                <span className="text-sm">กำลังคิด...</span>
+                                                                <span className="text-sm">Thinking...</span>
                                                             </div>
                                                         ) : msg.toolCalls?.length ? (
                                                             <div className="flex items-center gap-2 text-muted-foreground mt-2">
                                                                 <Loader size={16} />
-                                                                <span className="text-sm">กำลังสรุปข้อมูล...</span>
+                                                                <span className="text-sm">Summarizing...</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-2 text-muted-foreground">
                                                                 <Loader size={16} />
-                                                                <span className="text-sm">กำลังเขียนคำตอบ...</span>
+                                                                <span className="text-sm">Writing response...</span>
                                                             </div>
                                                         )
                                                     ) : (
@@ -456,7 +456,7 @@ export default function AIPlannerPage() {
                     <PromptInput onSubmit={handleSubmit}>
                         <PromptInputBody>
                             <PromptInputTextarea
-                                placeholder="พิมพ์ข้อความ..."
+                                placeholder="Type a message..."
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
                             />
