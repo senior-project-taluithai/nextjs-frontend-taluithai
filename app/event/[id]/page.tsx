@@ -4,7 +4,8 @@ import { use } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Heart, Share2, Clock, Star, Info } from "lucide-react";
+import { Calendar, MapPin, Heart, Share2, Clock, Star, Info, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { notFound } from "next/navigation";
 import { eventService } from "@/lib/services/event";
 import { Separator } from "@/components/ui/separator";
@@ -140,6 +141,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                         </div>
 
+
+
+                        {!event.detail && (
+                            <Alert variant="destructive" className="mt-4">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Missing Information</AlertTitle>
+                                <AlertDescription>
+                                    This event currently has no English description available.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         <Separator className="my-8" />
 
                         <div className="flex gap-4">
@@ -219,6 +232,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

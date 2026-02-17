@@ -4,7 +4,8 @@ import { use } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, Heart, Share2, Info } from "lucide-react";
+import { Star, MapPin, Heart, Share2, Info, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { notFound } from "next/navigation";
 import { placeService } from "@/lib/services/place";
 import { Separator } from "@/components/ui/separator";
@@ -62,6 +63,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                                     src={url}
                                                     alt={`${place.name} - ${index + 1}`}
                                                     fill
+                                                    unoptimized
                                                     className="object-cover"
                                                     priority={index === 0}
                                                 />
@@ -75,9 +77,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         ) : (
                             <div className="relative h-full w-full">
                                 <Image
-                                    src={place.thumbnail_url}
+                                    src={place.thumbnail_url || '/fallback.jpg'}
                                     alt={place.name}
                                     fill
+                                    unoptimized
                                     className="object-cover"
                                     priority
                                 />
@@ -112,10 +115,6 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
 
                         <Separator className="my-8" />
 
-                        <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 mb-8">
-                            {place.detail}
-                        </p>
-
                         <div className="flex gap-4">
                             <Button
                                 size="lg"
@@ -146,8 +145,17 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                 About this place
                             </h3>
                             <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line">
-                                {place.detail}
+                                {place.detail_en}
                             </p>
+                            {!place.detail && (
+                            <Alert variant="destructive" className="mb-8">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Missing Information</AlertTitle>
+                                <AlertDescription>
+                                    This place currently has no description available.
+                                </AlertDescription>
+                            </Alert>
+                        )}
                         </section>
 
                         <section>

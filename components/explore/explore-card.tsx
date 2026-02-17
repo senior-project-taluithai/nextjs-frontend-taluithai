@@ -18,7 +18,7 @@ interface ExploreCardProps {
 export function ExploreCard({ item, type }: ExploreCardProps) {
     const { data: provinces = [] } = useProvinces();
     const province = provinces.find((p) => p.id === item.province_id);
-    const imageUrl = item.thumbnail_url;
+    const imageUrl = item.thumbnail_url || '/fallback.jpg';
 
     const rating = item.rating;
 
@@ -29,6 +29,7 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
                     src={imageUrl || "/placeholder.jpg"}
                     alt={item.name || item.name_en || "Explore Item"}
                     fill
+                    unoptimized
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute top-3 right-3 flex gap-2">

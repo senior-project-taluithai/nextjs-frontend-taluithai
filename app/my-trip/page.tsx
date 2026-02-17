@@ -205,7 +205,7 @@ function TripCard({ trip, onDeleteClick }: { trip: TripDto; onDeleteClick: (id: 
     const provinceNames = trip.provinces.map(p => p.name_en).join(", ");
 
     // Use first province's image as cover, or fallback
-    const cover_image = trip.provinces[0]?.image_url || "https://picsum.photos/1000/600?grayscale";
+    const cover_image = trip.provinces[0]?.image_url || "/fallback.jpg";
 
     // Calculate trip duration
     const start = new Date(trip.start_date);

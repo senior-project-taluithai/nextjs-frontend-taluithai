@@ -208,9 +208,10 @@ function PlaceCard({ place, provinces }: { place: Place; provinces: Province[] }
       <Card className="h-full border-0 shadow-md hover:shadow-xl transition-all duration-300 group overflow-hidden">
         <div className="relative aspect-[4/3] overflow-hidden">
           <Image
-            src={place.thumbnail_url}
+            src={place.thumbnail_url || '/fallback.jpg'}
             alt={place.name}
             fill
+            unoptimized
             className="object-cover group-hover:scale-110 transition-transform duration-500"
           />
           <div className="absolute top-3 right-3 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-1 rounded-md flex items-center gap-1 text-sm font-semibold shadow-sm">
@@ -224,11 +225,11 @@ function PlaceCard({ place, provinces }: { place: Place; provinces: Province[] }
               {place.categories[0] || 'Place'}
             </Badge>
           </div>
-          <h3 className="font-bold text-lg line-clamp-1 mb-1 group-hover:text-primary transition-colors">{place.name}</h3>
+          <h3 className="font-bold text-lg line-clamp-1 mb-1 group-hover:text-primary transition-colors">{place.name_en}</h3>
           <p className="text-muted-foreground text-sm flex items-center gap-1 mb-2">
             <MapPin className="w-3 h-3" /> {provinces.find(p => p.id === place.province_id)?.name_en}
           </p>
-          <p className="text-sm text-gray-500 line-clamp-2">{place.detail}</p>
+          <p className="text-sm text-gray-500 line-clamp-2">{place.detail_en}</p>
         </CardContent>
       </Card>
     </Link>
@@ -245,8 +246,9 @@ function EventCard({ event, provinces }: { event: Event; provinces: Province[] }
         <div className="relative w-full md:w-2/5 aspect-video md:aspect-auto">
           <Image
             src={event.thumbnail_url}
-            alt={event.name}
+            alt={event.name_en}
             fill
+            unoptimized
             className="object-cover group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute top-3 left-3 bg-primary text-primary-foreground px-3 py-1 rounded-md text-center shadow-lg">
@@ -262,7 +264,7 @@ function EventCard({ event, provinces }: { event: Event; provinces: Province[] }
             ))}
           </div>
           <h3 className="text-2xl font-bold mb-2 group-hover:text-primary transition-colors">{event.name_en}</h3>
-          <p className="text-muted-foreground mb-4 line-clamp-2">{event.detail}</p>
+          <p className="text-muted-foreground mb-4 line-clamp-2">{event.detail_en}</p>
           <div className="flex items-center gap-4 text-sm text-gray-500 mt-auto">
             <div className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />

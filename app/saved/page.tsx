@@ -17,8 +17,8 @@ export default function SavedPage() {
 
     const savedPlaces = favoritePlacesData?.data ?? [];
     const savedEvents = favoriteEventsData?.data ?? [];
-    const totalPlacePages = favoritePlacesData?.last_page ?? 1;
-    const totalEventPages = favoriteEventsData?.last_page ?? 1;
+    const totalPlacePages = favoritePlacesData?.lastPage ?? 1;
+    const totalEventPages = favoriteEventsData?.lastPage ?? 1;
 
 
     // Render a Pagination Control helper

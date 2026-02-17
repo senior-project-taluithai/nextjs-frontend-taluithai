@@ -623,11 +623,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                                         />
                                                     </PaginationItem>
 
-                                                    {Array.from({ length: placesData.last_page }).map((_, i) => {
+                                                    {Array.from({ length: placesData.lastPage }).map((_, i) => {
                                                         const page = i + 1;
                                                         if (
                                                             page === 1 ||
-                                                            page === placesData.last_page ||
+                                                            page === placesData.lastPage ||
                                                             (page >= placesPage - 1 && page <= placesPage + 1)
                                                         ) {
                                                             return (
@@ -652,8 +652,8 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
                                                     <PaginationItem>
                                                         <PaginationNext
-                                                            onClick={() => setPlacesPage(p => Math.max(1, Math.min(placesData.last_page || 1, p + 1)))}
-                                                            className={cn("cursor-pointer", placesPage === (placesData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                            onClick={() => setPlacesPage(p => Math.max(1, Math.min(placesData.lastPage || 1, p + 1)))}
+                                                            className={cn("cursor-pointer", placesPage === (placesData.lastPage || 1) && "pointer-events-none opacity-50")}
                                                         />
                                                     </PaginationItem>
                                                 </PaginationContent>
@@ -748,11 +748,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                                             />
                                                         </PaginationItem>
 
-                                                        {Array.from({ length: eventsData.last_page }).map((_, i) => {
+                                                        {Array.from({ length: eventsData.lastPage }).map((_, i) => {
                                                             const page = i + 1;
                                                             if (
                                                                 page === 1 ||
-                                                                page === eventsData.last_page ||
+                                                                page === eventsData.lastPage ||
                                                                 (page >= eventsPage - 1 && page <= eventsPage + 1)
                                                             ) {
                                                                 return (
@@ -777,8 +777,8 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
                                                         <PaginationItem>
                                                             <PaginationNext
-                                                                onClick={() => setEventsPage(p => Math.max(1, Math.min(eventsData.last_page || 1, p + 1)))}
-                                                                className={cn("cursor-pointer", eventsPage === (eventsData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                                onClick={() => setEventsPage(p => Math.max(1, Math.min(eventsData.lastPage || 1, p + 1)))}
+                                                                className={cn("cursor-pointer", eventsPage === (eventsData.lastPage || 1) && "pointer-events-none opacity-50")}
                                                             />
                                                         </PaginationItem>
                                                     </PaginationContent>
@@ -839,11 +839,11 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                                                             />
                                                         </PaginationItem>
 
-                                                        {Array.from({ length: savedData.last_page }).map((_, i) => {
+                                                        {Array.from({ length: savedData.lastPage }).map((_, i) => {
                                                             const page = i + 1;
                                                             if (
                                                                 page === 1 ||
-                                                                page === savedData.last_page ||
+                                                                page === savedData.lastPage ||
                                                                 (page >= savedPage - 1 && page <= savedPage + 1)
                                                             ) {
                                                                 return (
@@ -868,8 +868,8 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
                                                         <PaginationItem>
                                                             <PaginationNext
-                                                                onClick={() => setSavedPage(p => Math.max(1, Math.min(savedData.last_page || 1, p + 1)))}
-                                                                className={cn("cursor-pointer", savedPage === (savedData.last_page || 1) && "pointer-events-none opacity-50")}
+                                                                onClick={() => setSavedPage(p => Math.max(1, Math.min(savedData.lastPage || 1, p + 1)))}
+                                                                className={cn("cursor-pointer", savedPage === (savedData.lastPage || 1) && "pointer-events-none opacity-50")}
                                                             />
                                                         </PaginationItem>
                                                     </PaginationContent>
@@ -898,7 +898,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
 function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; onAdd: () => void; isAdded: boolean }) {
     // Determine image URL
-    const imageUrl = item.thumbnail_url;
+    const imageUrl = item.thumbnail_url || "/fallback.jpg";
     // Determine tags to show
     const categories = item.categories || [];
 
