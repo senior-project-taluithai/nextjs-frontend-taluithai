@@ -95,7 +95,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         ) : (
                             <div className="relative h-full w-full">
                                 <Image
-                                    src={event.thumbnail_url}
+                                    src={event.thumbnail_url || '/placeholder.svg'}
                                     alt={event.name}
                                     fill
                                     className="object-cover"
