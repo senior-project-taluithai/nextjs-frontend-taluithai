@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { favoriteService } from "@/lib/services/favorite";
+import { interactionService } from "@/lib/services/interaction";
 
 export const useFavoritePlaces = (page: number = 1, pageSize: number = 10) => {
   return useQuery({
@@ -47,8 +48,7 @@ export const useToggleFavoritePlace = () => {
             // Since we toggled, we can say "Updated favorites".
             // A better UX might be knowing if it was added or removed.
             // But we only know !previousIsSaved.
-            const isSaved = queryClient.getQueryData(["favorites", "isSaved", "place", variables]);
-             toast.success(isSaved ? "Added to favorites" : "Removed from favorites");
+            const isSaved = queryClient.getQueryData(["favorites", "isSaved", "place", variables]);             if (isSaved) interactionService.track({ place_id: variables, interaction_type: 'save' });             toast.success(isSaved ? "Added to favorites" : "Removed from favorites");
         },
     });
 };
@@ -75,6 +75,7 @@ export const useToggleFavoriteEvent = () => {
              queryClient.invalidateQueries({ queryKey: ["favorites", "isSaved", "event", variables] });
              
              const isSaved = queryClient.getQueryData(["favorites", "isSaved", "event", variables]);
+             if (isSaved) interactionService.track({ event_id: variables, interaction_type: 'save' });
              toast.success(isSaved ? "Event saved to calendar" : "Event removed from calendar");
         },
     });

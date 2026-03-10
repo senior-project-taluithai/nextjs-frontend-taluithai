@@ -43,3 +43,12 @@ export const useExplorePlaces = (query: import("@/lib/dtos/place.dto").ExplorePl
     queryFn: () => placeService.explore(query),
   });
 };
+
+export const useTiktokVideos = (placeId: number) => {
+  return useQuery({
+    queryKey: ["places", placeId, "tiktok-videos"],
+    queryFn: () => placeService.getTiktokVideos(placeId),
+    enabled: !!placeId,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+};

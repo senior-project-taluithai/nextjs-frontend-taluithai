@@ -20,6 +20,8 @@ import {
     CarouselPrevious,
 } from "@/components/ui/carousel";
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { interactionService } from "@/lib/services/interaction";
 
 const Map = dynamic(() => import("@/components/map/LeafletMap"), {
     ssr: false,
@@ -33,6 +35,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoriteEvent();
     const { data: isSaved = false } = useIsFavoriteEvent(eventId);
+
+    useEffect(() => {
+        if (event) interactionService.track({ event_id: eventId, interaction_type: 'view' });
+    }, [event, eventId]);
 
     // We can use isSaved directly or sync it. 
     // If we use local state for optimistic UI, we should init it with isSaved but useEffect to update?
@@ -153,7 +159,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
                                 {isSaved ? 'Saved' : 'Add to Favorites'}
                             </Button>
-                            <Button size="lg" variant="outline" className="px-6">
+                            <Button size="lg" variant="outline" className="px-6" onClick={() => {
+                                navigator.clipboard.writeText(window.location.href);
+                                interactionService.track({ event_id: event.id, interaction_type: 'share' });
+                            }}>
                                 <Share2 className="w-5 h-5" />
                             </Button>
                         </div>

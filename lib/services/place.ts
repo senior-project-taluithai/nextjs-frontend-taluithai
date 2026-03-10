@@ -31,4 +31,9 @@ export const placeService = {
     const response = await api.get<Place>(`/places/${id}`);
     return response.data;
   },
+
+  getTiktokVideos: async (id: number): Promise<string[]> => {
+    const response = await api.get<{ videos: string[] }>(`/places/${id}/tiktok-videos`);
+    return response.data.videos;
+  },
 };
