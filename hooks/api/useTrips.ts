@@ -111,6 +111,16 @@ export function useAddTripDayItem() {
     }) => tripExtendedService.addItemToTripDay(tripId, dayNumber, item),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['trips', variables.tripId] });
+      const item = variables.item;
+      if (item.item_type === 'place' && item.item_id) {
+        import('@/lib/services/interaction').then(({ interactionService }) =>
+          interactionService.track({ place_id: item.item_id, interaction_type: 'add_to_trip' }),
+        );
+      } else if (item.item_type === 'event' && item.item_id) {
+        import('@/lib/services/interaction').then(({ interactionService }) =>
+          interactionService.track({ event_id: item.item_id, interaction_type: 'add_to_trip' }),
+        );
+      }
     },
   });
 }

@@ -10,6 +10,7 @@ import { placeService } from "@/lib/services/place";
 import { Separator } from "@/components/ui/separator";
 import { ReviewsSection } from "@/components/reviews-section";
 import { usePlace } from "@/hooks/api/usePlaces";
+import { useTiktokVideos } from "@/hooks/api/usePlaces";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { useToggleFavoritePlace, useIsFavoritePlace } from "@/hooks/api/useFavorites";
 import {
@@ -20,6 +21,9 @@ import {
     CarouselPrevious,
 } from "@/components/ui/carousel";
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { interactionService } from "@/lib/services/interaction";
+import { TikTokEmbed } from "react-social-media-embed";
 
 const Map = dynamic(() => import("@/components/map/LeafletMap"), {
     ssr: false,
@@ -33,6 +37,11 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoritePlace();
     const { data: isSaved = false } = useIsFavoritePlace(placeId);
+    const { data: tiktokVideos = [], isLoading: isLoadingTiktok } = useTiktokVideos(placeId);
+
+    useEffect(() => {
+        if (place) interactionService.track({ place_id: placeId, interaction_type: 'view' });
+    }, [place, placeId]);
 
     if (isLoadingPlace) {
         return <div className="min-h-screen flex items-center justify-center">Loading place...</div>;
@@ -125,7 +134,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                 <Heart className={`w-5 h-5 ${isSaved ? 'fill-white' : ''}`} />
                                 {isSaved ? 'Saved' : 'Add to Favorites'}
                             </Button>
-                            <Button size="lg" variant="outline" className="px-6">
+                            <Button size="lg" variant="outline" className="px-6" onClick={() => {
+                                navigator.clipboard.writeText(window.location.href);
+                                interactionService.track({ place_id: place.id, interaction_type: 'share' });
+                            }}>
                                 <Share2 className="w-5 h-5" />
                             </Button>
                         </div>
@@ -162,6 +174,31 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         <section>
                             {/* Reviews mocked as empty for now */}
                             <ReviewsSection reviews={[]} />
+                        </section>
+
+                        {/* TikTok Videos Section */}
+                        <section>
+                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.66a8.16 8.16 0 004.76 1.53v-3.5a4.78 4.78 0 01-1-.01z"/></svg>
+                                TikTok Videos
+                            </h3>
+                            {isLoadingTiktok ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {[...Array(3)].map((_, i) => (
+                                        <div key={i} className="h-[400px] bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl" />
+                                    ))}
+                                </div>
+                            ) : tiktokVideos.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {tiktokVideos.map((url) => (
+                                        <div key={url} className="flex justify-center">
+                                            <TikTokEmbed url={url} width={325} />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground text-sm">No TikTok videos found for this place.</p>
+                            )}
                         </section>
                     </div>
 
