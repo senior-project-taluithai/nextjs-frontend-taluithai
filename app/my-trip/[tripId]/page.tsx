@@ -244,7 +244,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
                 rating: detail.rating,
                 thumbnail_url: detail.thumbnail_url
             };
-        }).filter(item => item !== null && item.latitude && item.longitude);
+        }).filter((item): item is NonNullable<typeof item> => item !== null && !!item.latitude && !!item.longitude);
     }, [currentDay]);
 
 
@@ -898,7 +898,7 @@ export default function TripPlannerPage({ params }: { params: Promise<{ tripId: 
 
 function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; onAdd: () => void; isAdded: boolean }) {
     // Determine image URL
-    const imageUrl = item.thumbnail_url;
+    const imageUrl = item.thumbnail_url || null;
     // Determine tags to show
     const categories = item.categories || [];
 
@@ -906,11 +906,13 @@ function PlannerCard({ item, type, onAdd, isAdded }: { item: any; type: string; 
         <div className="bg-card rounded-xl border-none shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col group h-full">
             <div className="relative h-48 w-full bg-muted overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={imageUrl}
-                    alt={item.name_en || item.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
+                {imageUrl && (
+                    <img
+                        src={imageUrl}
+                        alt={item.name_en || item.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                )}
 
                 {/* Badges */}
                 <div className="absolute top-3 right-3 flex gap-2">

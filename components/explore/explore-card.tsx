@@ -26,7 +26,7 @@ export function ExploreCard({ item, type }: ExploreCardProps) {
         <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-none shadow-sm flex flex-col h-full bg-card">
             <div className="relative h-48 w-full overflow-hidden">
                 <Image
-                    src={imageUrl || "/placeholder.jpg"}
+                    src={imageUrl || "/placeholder.svg"}
                     alt={item.name || item.name_en || "Explore Item"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"

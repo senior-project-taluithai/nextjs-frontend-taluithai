@@ -75,7 +75,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         ) : (
                             <div className="relative h-full w-full">
                                 <Image
-                                    src={place.thumbnail_url}
+                                    src={place.thumbnail_url || '/placeholder.svg'}
                                     alt={place.name}
                                     fill
                                     className="object-cover"
@@ -112,9 +112,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
 
                         <Separator className="my-8" />
 
-                        <p className="text-lg leading-relaxed text-slate-600 dark:text-slate-300 mb-8">
-                            {place.detail}
-                        </p>
+
 
                         <div className="flex gap-4">
                             <Button

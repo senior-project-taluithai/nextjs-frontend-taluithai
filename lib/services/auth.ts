@@ -11,7 +11,9 @@ import {
 import {
     UserProfile,
     TravelPreference,
-    UpdateUserPreferencesDto
+    UpdateUserPreferencesDto,
+    RecommendationPreferences,
+    UpdateRecommendationPreferencesDto
 } from '../dtos/user.dto';
 
 // Re-export for compatibility
@@ -24,7 +26,9 @@ export type {
     AuthResponse,
     UserProfile,
     TravelPreference,
-    UpdateUserPreferencesDto
+    UpdateUserPreferencesDto,
+    RecommendationPreferences,
+    UpdateRecommendationPreferencesDto
 };
 
 import { api } from '../api-client';
@@ -80,6 +84,16 @@ export const authService = {
 
   updateUserPreferences: async (data: UpdateUserPreferencesDto): Promise<TravelPreference[]> => {
       const response = await api.post<TravelPreference[]>('/users/me/preferences', data);
+      return response.data;
+  },
+
+  getRecommendationPreferences: async (): Promise<RecommendationPreferences> => {
+      const response = await api.get<RecommendationPreferences>('/users/me/recommendation-preferences');
+      return response.data;
+  },
+
+  updateRecommendationPreferences: async (data: UpdateRecommendationPreferencesDto): Promise<RecommendationPreferences> => {
+      const response = await api.post<RecommendationPreferences>('/users/me/recommendation-preferences', data);
       return response.data;
   },
   

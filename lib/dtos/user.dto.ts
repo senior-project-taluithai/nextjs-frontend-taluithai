@@ -14,3 +14,13 @@ export interface TravelPreference {
 export interface UpdateUserPreferencesDto {
   preferenceIds: string[];
 }
+
+export interface RecommendationPreferences {
+  preferredCategoryIds: number[];
+  preferredRegions: string[];
+}
+
+export interface UpdateRecommendationPreferencesDto {
+  preferredCategoryIds?: number[];
+  preferredRegions?: string[];
+}

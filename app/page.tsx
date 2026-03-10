@@ -208,7 +208,7 @@ function PlaceCard({ place, provinces }: { place: Place; provinces: Province[] }
       <Card className="h-full border-0 shadow-md hover:shadow-xl transition-all duration-300 group overflow-hidden">
         <div className="relative aspect-[4/3] overflow-hidden">
           <Image
-            src={place.thumbnail_url}
+            src={place.thumbnail_url || '/placeholder.svg'}
             alt={place.name}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -244,7 +244,7 @@ function EventCard({ event, provinces }: { event: Event; provinces: Province[] }
       <Card className="flex flex-col md:flex-row overflow-hidden border-0 shadow-lg hover:shadow-xl transition-shadow h-full group">
         <div className="relative w-full md:w-2/5 aspect-video md:aspect-auto">
           <Image
-            src={event.thumbnail_url}
+            src={event.thumbnail_url || '/placeholder.svg'}
             alt={event.name}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-500"
