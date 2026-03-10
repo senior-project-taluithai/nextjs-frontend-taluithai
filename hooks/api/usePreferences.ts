@@ -41,6 +41,8 @@ export const useUpdateRecommendationPreferencesMutation = () => {
       authService.updateRecommendationPreferences(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recommendation-preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["places", "recommended"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
     },
   });
 };
