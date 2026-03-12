@@ -5,14 +5,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
 import {
-    ArrowLeft, Star, MapPin, Heart, Share2, Plus, Calendar, Clock,
-    Tag, Sparkles, Globe, Navigation2, Play, ExternalLink, Search,
-    Loader2, TrendingUp, Eye, ThumbsUp, Gem, Camera,
-    Users, Compass, Sun, CloudRain, Thermometer, ChevronRight,
-    MessageCircle, Award, Maximize2, X, ChevronLeft, Info
+    Loader2, MapPin, Star, Heart, Share2, ArrowLeft, Plus, Clock, Camera, Globe, Tag, Info, ThumbsUp, X, ChevronLeft, ChevronRight, Maximize2, Play, Calendar, Gem, Users, Navigation2, MessageSquare, Send
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
-import { useEvent } from "@/hooks/api/useEvents";
+import { useEvent, useAddEventReview } from "@/hooks/api/useEvents";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { useToggleFavoriteEvent, useIsFavoriteEvent } from "@/hooks/api/useFavorites";
 import { interactionService } from "@/lib/services/interaction";
@@ -177,7 +173,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoriteEvent();
     const { data: isSaved = false } = useIsFavoriteEvent(eventId);
+    const addReviewMutation = useAddEventReview();
 
+    const [userRating, setUserRating] = useState(0);
+    const [hoverRating, setHoverRating] = useState(0);
+    const [comment, setComment] = useState("");
     const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "photos">("overview");
     const [scrollY, setScrollY] = useState(0);
     const [lightboxOpen, setLightboxOpen] = useState<number | null>(null);
@@ -207,8 +207,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const heroParallax = Math.min(scrollY * 0.35, 150);
     const heroOpacity = Math.max(1 - scrollY / 500, 0);
 
-    const reviewCount = ~~(Math.random() * 200) + 40; // Mock review count
-    const rating = event.rating && event.rating > 0 ? event.rating : 4.8;
+    const reviewCount = event?.reviews?.length || 0;
+    const rating = Math.round((event?.rating || 0) * 10) / 10;
     const rank = Math.floor(Math.random() * 5) + 1; // Mock rank for the province
 
     const startDate = new Date(event.start_date);
@@ -220,11 +220,21 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const daysDifference = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
     const durationText = daysDifference > 0 ? `${daysDifference + 1} Days` : "1 Day Event";
 
-    // Mock Reviews
-    const reviews = [
-        { id: 1, user: "Nong N.", avatar: "N", rating: 5, date: "Nov 3, 2024", comment: "Amazing festival experience! The cultural performances were spectacular. Glad we got there early to get a good spot.", helpful: 42, avatar_bg: "from-pink-400 to-rose-600" },
-        { id: 2, user: "Sarah T.", avatar: "S", rating: 4, date: "Dec 12, 2024", comment: "Very crowded but totally worth it. The food stalls were incredible.", helpful: 15, avatar_bg: "from-purple-400 to-indigo-600" },
-    ];
+    const handleSubmitReview = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!comment.trim() || userRating === 0) return;
+
+        addReviewMutation.mutate({
+            id: eventId,
+            comment,
+            rating: userRating
+        }, {
+            onSuccess: () => {
+                setComment("");
+                setUserRating(0);
+            }
+        });
+    };
 
     return (
         <div className="flex-1 min-h-screen pb-20 bg-[#f4f6f8]" style={{ scrollBehavior: "smooth" }}>
@@ -558,43 +568,97 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                         </div>
                                     </div>
 
+                                    {/* Write Review Form */}
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-5">
+                                        <h3 className="text-gray-900 mb-4" style={{ fontWeight: 700 }}>Write a Review</h3>
+                                        <form onSubmit={handleSubmitReview}>
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <span className="text-sm text-gray-500">Your Rating</span>
+                                                <div className="flex gap-1" onMouseLeave={() => setHoverRating(0)}>
+                                                    {[1, 2, 3, 4, 5].map((star) => (
+                                                        <button
+                                                            key={star}
+                                                            type="button"
+                                                            onMouseEnter={() => setHoverRating(star)}
+                                                            onClick={() => setUserRating(star)}
+                                                            className="p-1 transition-transform hover:scale-110"
+                                                        >
+                                                            <Star
+                                                                className={`w-5 h-5 transition-colors ${star <= (hoverRating || userRating)
+                                                                    ? "text-amber-400 fill-amber-400"
+                                                                    : "text-gray-200 fill-gray-200"
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="relative mb-4">
+                                                <textarea
+                                                    value={comment}
+                                                    onChange={(e) => setComment(e.target.value)}
+                                                    placeholder="Share your experience..."
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all min-h-[100px] resize-none"
+                                                />
+                                            </div>
+                                            <div className="flex justify-end">
+                                                <button
+                                                    type="submit"
+                                                    disabled={!comment.trim() || userRating === 0 || addReviewMutation.isPending}
+                                                    className="flex items-center gap-2 bg-pink-500 hover:bg-pink-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-pink-200"
+                                                >
+                                                    {addReviewMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                    {addReviewMutation.isPending ? "Posting..." : "Post Review"}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+
                                     {/* Reviews List */}
                                     <div className="space-y-3 mb-5">
-                                        {reviews.map((review, idx) => (
-                                            <motion.div
-                                                key={review.id}
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.1 }}
-                                            >
-                                                <Tilt3DCard intensity={2}>
-                                                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${review.avatar_bg} flex items-center justify-center text-white shadow-md`}
-                                                                    style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                                                                    {review.avatar}
+                                        {event.reviews && event.reviews.length > 0 ? (
+                                            event.reviews.slice().reverse().map((review: any, idx: number) => {
+                                                const uName = review.user?.firstName || review.user?.email?.split('@')[0] || "Anonymous";
+                                                const avatarL = uName.charAt(0).toUpperCase();
+                                                const rawDate = new Date(review.date || Date.now());
+                                                const fmtDate = rawDate.toLocaleDateString("en-US", { year: 'numeric', month: 'short', day: 'numeric' });
+
+                                                return (
+                                                    <motion.div
+                                                        key={review.id || idx}
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: idx * 0.1 }}
+                                                    >
+                                                        <Tilt3DCard intensity={2}>
+                                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                                                <div className="flex items-start justify-between mb-3">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-400 to-rose-600 flex items-center justify-center text-white shadow-md font-bold text-sm">
+                                                                            {avatarL}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm text-gray-900 font-semibold">{uName}</p>
+                                                                            <p className="text-xs text-gray-400">{fmtDate}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 bg-amber-50 rounded-lg px-2 py-1">
+                                                                        {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`} />)}
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-sm text-gray-900" style={{ fontWeight: 600 }}>{review.user}</p>
-                                                                    <p className="text-xs text-gray-400">{review.date}</p>
-                                                                </div>
+                                                                <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.comment}</p>
                                                             </div>
-                                                            <div className="flex items-center gap-1 bg-amber-50 rounded-lg px-2 py-1">
-                                                                {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`} />)}
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.comment}</p>
-                                                        <div className="flex items-center gap-4">
-                                                            <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-pink-600 transition-colors">
-                                                                <ThumbsUp className="w-3.5 h-3.5" />
-                                                                <span>Helpful ({review.helpful})</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </Tilt3DCard>
-                                            </motion.div>
-                                        ))}
+                                                        </Tilt3DCard>
+                                                    </motion.div>
+                                                )
+                                            })
+                                        ) : (
+                                            <div className="text-center py-10">
+                                                <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                                <p className="text-gray-500 font-medium">No reviews yet</p>
+                                                <p className="text-gray-400 text-xs mt-1">Be the first to share your experience!</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}

@@ -41,4 +41,9 @@ export const placeService = {
     const response = await api.get<{ videos: string[] }>(`/places/${id}/tiktok-videos`);
     return response.data.videos;
   },
+
+  addReview: async (id: number, comment: string, rating: number): Promise<any> => {
+    const response = await api.post(`/places/${id}/reviews`, { comment, rating });
+    return response.data;
+  },
 };

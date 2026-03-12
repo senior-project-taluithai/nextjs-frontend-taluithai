@@ -15,6 +15,7 @@ export interface Event {
   thumbnail_url: string;
   image_urls: string[];
   categories: string[];
+  reviews?: any[];
 }
 
 export interface ExploreEventsQuery {

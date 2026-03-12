@@ -40,3 +40,13 @@ export const useCreateEventMutation = () => {
     },
   });
 };
+
+export const useAddEventReview = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, comment, rating }: { id: number; comment: string; rating: number }) => eventService.addReview(id, comment, rating),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["events", variables.id] });
+    },
+  });
+};

@@ -26,4 +26,9 @@ export const eventService = {
     const response = await api.post<Event>('/events', data);
     return response.data;
   },
+
+  addReview: async (id: number, comment: string, rating: number): Promise<any> => {
+    const response = await api.post(`/events/${id}/reviews`, { comment, rating });
+    return response.data;
+  },
 };

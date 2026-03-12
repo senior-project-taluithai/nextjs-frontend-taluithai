@@ -9,10 +9,11 @@ import {
     Tag, Sparkles, Globe, Navigation2, Play, ExternalLink, Search,
     Loader2, TrendingUp, Eye, ThumbsUp, Gem, Camera,
     Users, Compass, Sun, CloudRain, Thermometer, ChevronRight,
-    MessageCircle, Award, Maximize2, X, ChevronLeft, Info
+    MessageCircle, Award, Maximize2, X, ChevronLeft, Info,
+    MessageSquare, Send
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
-import { usePlace, useTiktokVideos } from "@/hooks/api/usePlaces";
+import { usePlace, useTiktokVideos, useAddPlaceReview } from "@/hooks/api/usePlaces";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { useToggleFavoritePlace, useIsFavoritePlace } from "@/hooks/api/useFavorites";
 import { interactionService } from "@/lib/services/interaction";
@@ -190,6 +191,8 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const { data: isSaved = false } = useIsFavoritePlace(placeId);
     const { data: tiktokVideos = [], isLoading: isLoadingTiktok } = useTiktokVideos(placeId);
 
+    const addReviewMutation = useAddPlaceReview();
+
     const [userRating, setUserRating] = useState(0);
     const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState("");
@@ -224,15 +227,25 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const heroParallax = Math.min(scrollY * 0.35, 150);
     const heroOpacity = Math.max(1 - scrollY / 500, 0);
 
-    const reviewCount = ~~(Math.random() * 500) + 120; // Mock review count since backend doesn't provide it yet
-    const rating = place.rating && place.rating > 0 ? place.rating : 4.5;
+    const reviewCount = place?.reviews?.length || 0;
+    const rating = Math.round((place?.rating || 0) * 10) / 10;
     const rank = Math.floor(Math.random() * 5) + 1; // Mock rank for the province
 
-    // Mock Reviews
-    const reviews = [
-        { id: 1, user: "Somchai K.", avatar: "S", rating: 5, date: "Jan 15, 2025", comment: "Beautiful place, perfect weather. Highly recommended for a morning visit! The english descriptions were helpful.", helpful: 24, avatar_bg: "from-emerald-400 to-teal-600" },
-        { id: 2, user: "Alex M.", avatar: "A", rating: 4, date: "Dec 8, 2024", comment: "The views here are stunning. Bring a good camera.", helpful: 18, avatar_bg: "from-blue-400 to-indigo-600" },
-    ];
+    const handleSubmitReview = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!comment.trim() || userRating === 0) return;
+
+        addReviewMutation.mutate({
+            id: placeId,
+            comment,
+            rating: userRating
+        }, {
+            onSuccess: () => {
+                setComment("");
+                setUserRating(0);
+            }
+        });
+    };
 
     return (
         <div className="flex-1 min-h-screen pb-20 bg-[#f4f6f8]" style={{ scrollBehavior: "smooth" }}>
@@ -580,43 +593,97 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                         </div>
                                     </div>
 
+                                    {/* Write Review Form */}
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-5">
+                                        <h3 className="text-gray-900 mb-4" style={{ fontWeight: 700 }}>Write a Review</h3>
+                                        <form onSubmit={handleSubmitReview}>
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <span className="text-sm text-gray-500">Your Rating</span>
+                                                <div className="flex gap-1" onMouseLeave={() => setHoverRating(0)}>
+                                                    {[1, 2, 3, 4, 5].map((star) => (
+                                                        <button
+                                                            key={star}
+                                                            type="button"
+                                                            onMouseEnter={() => setHoverRating(star)}
+                                                            onClick={() => setUserRating(star)}
+                                                            className="p-1 transition-transform hover:scale-110"
+                                                        >
+                                                            <Star
+                                                                className={`w-5 h-5 transition-colors ${star <= (hoverRating || userRating)
+                                                                    ? "text-amber-400 fill-amber-400"
+                                                                    : "text-gray-200 fill-gray-200"
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="relative mb-4">
+                                                <textarea
+                                                    value={comment}
+                                                    onChange={(e) => setComment(e.target.value)}
+                                                    placeholder="Share your experience..."
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all min-h-[100px] resize-none"
+                                                />
+                                            </div>
+                                            <div className="flex justify-end">
+                                                <button
+                                                    type="submit"
+                                                    disabled={!comment.trim() || userRating === 0 || addReviewMutation.isPending}
+                                                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-200"
+                                                >
+                                                    {addReviewMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                    {addReviewMutation.isPending ? "Posting..." : "Post Review"}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+
                                     {/* Reviews List */}
                                     <div className="space-y-3 mb-5">
-                                        {reviews.map((review, idx) => (
-                                            <motion.div
-                                                key={review.id}
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.1 }}
-                                            >
-                                                <Tilt3DCard intensity={2}>
-                                                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${review.avatar_bg} flex items-center justify-center text-white shadow-md`}
-                                                                    style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                                                                    {review.avatar}
+                                        {place.reviews && place.reviews.length > 0 ? (
+                                            place.reviews.slice().reverse().map((review: any, idx: number) => {
+                                                const uName = review.user?.firstName || review.user?.email?.split('@')[0] || "Anonymous";
+                                                const avatarL = uName.charAt(0).toUpperCase();
+                                                const rawDate = new Date(review.date || Date.now());
+                                                const fmtDate = rawDate.toLocaleDateString("en-US", { year: 'numeric', month: 'short', day: 'numeric' });
+
+                                                return (
+                                                    <motion.div
+                                                        key={review.id || idx}
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: idx * 0.1 }}
+                                                    >
+                                                        <Tilt3DCard intensity={2}>
+                                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                                                <div className="flex items-start justify-between mb-3">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-white shadow-md font-bold text-sm">
+                                                                            {avatarL}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm text-gray-900 font-semibold">{uName}</p>
+                                                                            <p className="text-xs text-gray-400">{fmtDate}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 bg-amber-50 rounded-lg px-2 py-1">
+                                                                        {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`} />)}
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-sm text-gray-900" style={{ fontWeight: 600 }}>{review.user}</p>
-                                                                    <p className="text-xs text-gray-400">{review.date}</p>
-                                                                </div>
+                                                                <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.comment}</p>
                                                             </div>
-                                                            <div className="flex items-center gap-1 bg-amber-50 rounded-lg px-2 py-1">
-                                                                {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`} />)}
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.comment}</p>
-                                                        <div className="flex items-center gap-4">
-                                                            <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-600 transition-colors">
-                                                                <ThumbsUp className="w-3.5 h-3.5" />
-                                                                <span>Helpful ({review.helpful})</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </Tilt3DCard>
-                                            </motion.div>
-                                        ))}
+                                                        </Tilt3DCard>
+                                                    </motion.div>
+                                                )
+                                            })
+                                        ) : (
+                                            <div className="text-center py-10">
+                                                <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                                <p className="text-gray-500 font-medium">No reviews yet</p>
+                                                <p className="text-gray-400 text-xs mt-1">Be the first to share your experience!</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}
