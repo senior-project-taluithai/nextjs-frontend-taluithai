@@ -25,8 +25,9 @@ import { useProvinces } from "@/hooks/api/useProvinces";
 import {
   useRecommendedPlaces,
   usePopularPlaces,
-  useBestForSeasonPlaces,
+  useHiddenGems,
 } from "@/hooks/api/usePlaces";
+import { useToggleFavoritePlace, useIsFavoritePlace, useToggleFavoriteEvent, useIsFavoriteEvent } from "@/hooks/api/useFavorites";
 import { useUpcomingEvents } from "@/hooks/api/useEvents";
 import { Place } from "@/lib/dtos/place.dto";
 import { Event } from "@/lib/dtos/event.dto";
@@ -132,7 +133,8 @@ function getMatchScore(place: Place): number {
    PLACE CARD (3-D tilt + holographic glare)
 ═══════════════════════════════════════════════════ */
 function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; provinces: Province[]; size?: "default" | "large" | "small" }) {
-  const [saved, setSaved] = useState(false);
+  const { data: isSaved = false } = useIsFavoritePlace(place.id);
+  const { mutate: toggleFavorite } = useToggleFavoritePlace();
   const [hovered, setHovered] = useState(false);
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50 });
   const router = useRouter();
@@ -177,9 +179,9 @@ function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; pro
           <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
           <span className="text-xs font-semibold text-gray-800">{place.rating}</span>
         </motion.div>
-        <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => { e.stopPropagation(); setSaved(!saved); }}
+        <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
           className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/40 transition-colors">
-          <Heart className={`w-4 h-4 transition-all ${saved ? "text-red-400 fill-red-400 scale-110" : "text-white"}`} />
+          <Heart className={`w-4 h-4 transition-all ${isSaved ? "text-red-400 fill-red-400 scale-110" : "text-white"}`} />
         </motion.button>
         <div className="absolute bottom-3 left-3">
           <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-full border border-white/30">
@@ -193,12 +195,12 @@ function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; pro
         )}
       </div>
       <motion.div className="p-4" animate={{ y: hovered ? -1 : 0 }} transition={{ duration: 0.3 }}>
-        <h3 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-emerald-600 transition-colors">{place.name}</h3>
+        <h3 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-emerald-600 transition-colors">{place.name_en || place.name}</h3>
         <div className="flex items-center gap-1 text-gray-400 mb-2">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span className="text-xs truncate">{getProvinceName(provinces, place.province_id)}</span>
         </div>
-        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{place.detail}</p>
+        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{place.detail_en || place.detail}</p>
       </motion.div>
       {hovered && (
         <div className="absolute bottom-0 inset-x-0 h-0.5 pointer-events-none rounded-b-2xl"
@@ -214,7 +216,8 @@ function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; pro
 ═══════════════════════════════════════════════════ */
 function HeroCard({ place, provinces, index }: { place: Place; provinces: Province[]; index: number }) {
   const router = useRouter();
-  const [saved, setSaved] = useState(false);
+  const { data: isSaved = false } = useIsFavoritePlace(place.id);
+  const { mutate: toggleFavorite } = useToggleFavoritePlace();
   const [hovered, setHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const score = getMatchScore(place);
@@ -250,16 +253,16 @@ function HeroCard({ place, provinces, index }: { place: Place; provinces: Provin
           </span>
           <AnimatedScore score={score} size="lg" />
         </div>
-        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setSaved(!saved); }}
+        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
           className="absolute top-14 right-4 w-9 h-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-white/25 transition-colors">
-          <Heart className={`w-4 h-4 transition-all ${saved ? "fill-red-400 text-red-400" : "text-white"}`} />
+          <Heart className={`w-4 h-4 transition-all ${isSaved ? "fill-red-400 text-red-400" : "text-white"}`} />
         </motion.button>
         <div className="absolute bottom-0 left-0 right-0 p-5">
           <div className="flex items-center gap-1.5 mb-1.5">
             <MapPin className="w-3.5 h-3.5 text-white/60" />
             <span className="text-white/60 text-xs">{getProvinceName(provinces, place.province_id)}</span>
           </div>
-          <h3 className="text-white font-extrabold mb-3" style={{ fontSize: "1.55rem", lineHeight: 1.2 }}>{place.name}</h3>
+          <h3 className="text-white font-extrabold mb-3" style={{ fontSize: "1.55rem", lineHeight: 1.2 }}>{place.name_en || place.name}</h3>
           <motion.button whileHover={{ gap: "12px" }} initial={{ gap: "8px" }}
             onClick={(e) => { e.stopPropagation(); router.push(`/place/${place.id}`); }}
             className="flex items-center gap-2 bg-white text-gray-900 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-50 transition-colors shadow-lg">
@@ -304,8 +307,8 @@ function RankCard({ place, provinces, rank, delay }: { place: Place; provinces: 
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">{place.categories[0] || "Place"}</span>
             <span className="text-xs text-gray-400 flex items-center gap-0.5 truncate"><MapPin className="w-3 h-3 shrink-0" />{getProvinceName(provinces, place.province_id)}</span>
           </div>
-          <h4 className="font-bold text-gray-900 group-hover:text-emerald-600 transition-colors truncate mb-0.5" style={{ fontSize: "0.95rem" }}>{place.name}</h4>
-          <p className="text-xs text-gray-400 truncate mb-2">{place.name_en}</p>
+          <h4 className="font-bold text-gray-900 group-hover:text-emerald-600 transition-colors truncate mb-0.5" style={{ fontSize: "0.95rem" }}>{place.name_en || place.name}</h4>
+          <p className="text-xs text-gray-400 truncate mb-2">{place.name}</p>
         </div>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
@@ -397,8 +400,8 @@ function TrendCard({ place, provinces, rank, delay }: { place: Place; provinces:
         </div>
       </div>
       <motion.div className="p-4" animate={{ y: hovered ? -1 : 0 }} style={{ transform: "translateZ(8px)" }}>
-        <h4 className="font-bold text-gray-900 truncate mb-0.5" style={{ fontSize: "0.95rem" }}>{place.name}</h4>
-        <p className="text-xs text-gray-400 truncate mb-3">{place.name_en}</p>
+        <h4 className="font-bold text-gray-900 truncate mb-0.5" style={{ fontSize: "0.95rem" }}>{place.name_en || place.name}</h4>
+        <p className="text-xs text-gray-400 truncate mb-3">{place.name}</p>
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-gray-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Popularity</span>
@@ -419,83 +422,170 @@ function TrendCard({ place, provinces, rank, delay }: { place: Place; provinces:
 }
 
 /* ═══════════════════════════════════════════════════
+   HIDDEN GEM CARD (Dark thematic)
+═══════════════════════════════════════════════════ */
+function HiddenGemCard({ place, provinces, delay }: { place: Place; provinces: Province[]; delay: number }) {
+  const router = useRouter();
+  const [hovered, setHovered] = useState(false);
+  const { ref, rotateX, rotateY, glarePos, onMove, onLeave } = use3DTilt(8);
+
+  return (
+    <motion.div ref={ref}
+      initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      onMouseMove={(e) => { onMove(e); setHovered(true); }}
+      onMouseLeave={() => { onLeave(); setHovered(false); }}
+      style={{ rotateX, rotateY, transformPerspective: 1000, transformStyle: "preserve-3d", boxShadow: hovered ? "0 20px 40px rgba(5,150,105,0.2)" : "none" }}
+      onClick={() => router.push(`/place/${place.id}`)}
+      className="relative flex-shrink-0 w-64 h-80 rounded-3xl overflow-hidden cursor-pointer group bg-black"
+    >
+      <motion.div animate={{ scale: hovered ? 1.08 : 1 }} transition={{ duration: 0.8 }} className="w-full h-full relative">
+        <Image src={place.thumbnail_url || "/placeholder.svg"} alt={place.name_en || place.name} fill sizes="256px" quality={75} className="object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+      </motion.div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10" />
+      {hovered && (
+        <div className="absolute inset-0 pointer-events-none z-10" style={{
+          background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.15) 0%, transparent 60%)`, mixBlendMode: "overlay"
+        }} />
+      )}
+      <div className="absolute top-4 left-4" style={{ transform: "translateZ(20px)" }}>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-bold border border-white/20 shadow-lg">
+          <Gem className="w-3.5 h-3.5 text-emerald-400" /> Hidden Gem
+        </span>
+      </div>
+      <div className="absolute bottom-0 inset-x-0 p-5" style={{ transform: "translateZ(30px)" }}>
+        <h4 className="font-extrabold text-white mb-1 truncate" style={{ fontSize: "1.2rem", lineHeight: 1.2 }}>{place.name_en || place.name}</h4>
+        <p className="text-emerald-300 text-xs mb-3 font-medium truncate">{place.name}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-white/70">
+            <MapPin className="w-3.5 h-3.5" />
+            <span className="text-xs truncate max-w-[100px]">{getProvinceName(provinces, place.province_id)}</span>
+          </div>
+          <div className="flex items-center gap-1 text-amber-400">
+            <Star className="w-3.5 h-3.5 fill-current" />
+            <span className="text-xs font-bold text-white">{place.rating}</span>
+          </div>
+        </div>
+      </div>
+      {hovered && (
+        <div className="absolute inset-0 ring-1 ring-inset ring-emerald-500/30 rounded-3xl pointer-events-none" />
+      )}
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    FESTIVAL POSTER CARD
 ═══════════════════════════════════════════════════ */
 function FestivalPosterCard({ event, provinces, delay }: { event: Event; provinces: Province[]; delay: number }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const { ref, rotateX, rotateY, glarePos, onMove, onLeave } = use3DTilt(7);
+  const { data: isSaved = false } = useIsFavoriteEvent(event.id);
+  const { mutate: toggleFavorite } = useToggleFavoriteEvent();
+
   const days = Math.ceil((new Date(event.start_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
   const isPast = days < 0;
   const isNear = days >= 0 && days <= 30;
-  const colors = ["#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6"];
+  const colors = ["#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6", "#10b981"];
   const color = colors[(event.id || 0) % colors.length];
 
   return (
     <motion.div ref={ref}
-      initial={{ opacity: 0, y: 28, rotate: -1 }} animate={{ opacity: 1, y: 0, rotate: 0 }}
-      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 30, rotate: -2 }} animate={{ opacity: 1, y: 0, rotate: 0 }}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
       onMouseMove={(e) => { onMove(e); setHovered(true); }}
       onMouseLeave={() => { onLeave(); setHovered(false); }}
       style={{
-        rotateX, rotateY, transformPerspective: 800, transformStyle: "preserve-3d",
-        filter: hovered ? `drop-shadow(0 28px 50px ${color}60)` : `drop-shadow(0 4px 16px ${color}30)`
+        rotateX, rotateY, transformPerspective: 1000, transformStyle: "preserve-3d",
+        filter: hovered ? `drop-shadow(0 25px 45px ${color}40)` : `drop-shadow(0 4px 20px ${color}20)`
       }}
-      className="relative flex-1 min-w-0 rounded-3xl overflow-hidden cursor-pointer"
+      className="relative flex-1 min-w-0 rounded-[2rem] overflow-hidden cursor-pointer group border border-gray-100/50 bg-white"
     >
-      <div className="relative h-72">
-        <motion.div animate={{ scale: hovered ? 1.05 : 1 }} transition={{ duration: 0.7 }} className="w-full h-full relative">
-          <Image src={event.thumbnail_url || "/placeholder.svg"} alt={event.name} fill sizes="(max-width: 768px) 100vw, 33vw" quality={75} className="object-cover" />
-        </motion.div>
-        <div className="absolute inset-0" style={{ background: `linear-gradient(170deg, ${color}CC 0%, ${color}99 40%, ${color}22 70%, rgba(0,0,0,0.6) 100%)` }} />
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
-          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)", backgroundSize: "18px 18px"
-        }} />
-        {hovered && (
-          <div className="absolute inset-0 pointer-events-none z-10" style={{
-            background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.2) 0%, transparent 55%)`, mixBlendMode: "overlay"
+      <div className="h-full w-full flex flex-col" onClick={() => router.push(`/event/${event.id}`)}>
+        <div className="relative h-80">
+          <motion.div animate={{ scale: hovered ? 1.08 : 1 }} transition={{ duration: 0.8, ease: "easeOut" }} className="w-full h-full relative">
+            <Image src={event.thumbnail_url || "/placeholder.svg"} alt={event.name_en || event.name} fill sizes="(max-width: 768px) 100vw, 33vw" quality={85} className="object-cover" />
+          </motion.div>
+          {/* Enhanced Gradients */}
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.8) 100%)` }} />
+          <div className="absolute inset-0 mix-blend-overlay opacity-60" style={{ background: `linear-gradient(135deg, ${color} 0%, transparent 100%)` }} />
+
+          <div className="absolute inset-0 opacity-[0.08] pointer-events-none" style={{
+            backgroundImage: "radial-gradient(circle, #fff 1.5px, transparent 1.5px)", backgroundSize: "24px 24px"
           }} />
-        )}
-        <div className="absolute top-4 left-4" style={{ transform: "translateZ(14px)" }}>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-semibold border border-white/25">
-            <MapPin className="w-3 h-3" />{getProvinceName(provinces, event.province_id)}
-          </span>
-        </div>
-        <div className="absolute top-4 right-4" style={{ transform: "translateZ(14px)" }}>
-          {isPast ? (
-            <span className="px-2.5 py-1 rounded-full bg-gray-500/60 backdrop-blur-sm text-white/70 text-xs font-semibold border border-white/10">Ended</span>
-          ) : isNear ? (
-            <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-sm text-white text-xs font-bold border border-white/30">
-              <Zap className="w-3 h-3" />Soon!
-            </motion.span>
-          ) : null}
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 p-5" style={{ transform: "translateZ(16px)" }}>
-          {!isPast ? (
-            <div className="mb-3"><div className="flex items-baseline gap-1.5">
-              <motion.span animate={{ scale: hovered ? 1.06 : 1 }} className="font-black text-white" style={{ fontSize: "3.5rem", lineHeight: 1 }}>{days}</motion.span>
-              <span className="text-white/70 text-sm font-semibold">days away</span>
-            </div></div>
-          ) : (
-            <div className="mb-3"><span className="font-black text-white/40" style={{ fontSize: "3.5rem", lineHeight: 1 }}>—</span></div>
+
+          {hovered && (
+            <div className="absolute inset-0 pointer-events-none z-10" style={{
+              background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.25) 0%, transparent 50%)`, mixBlendMode: "overlay"
+            }} />
           )}
-          <h3 className="text-white font-extrabold mb-1" style={{ fontSize: "1.25rem", lineHeight: 1.2 }}>{event.name}</h3>
-          <p className="text-white/60 text-xs mb-3">{new Date(event.start_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-        </div>
-      </div>
-      <motion.div className="bg-white px-5 py-4" animate={{ y: hovered ? -1 : 0 }}>
-        <p className="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">{event.detail}</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5" style={{ color }} />
-            <span className="text-xs font-semibold" style={{ color }}>{event.name_en}</span>
+
+          <div className="absolute top-4 left-4" style={{ transform: "translateZ(20px)" }}>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-black/30 backdrop-blur-md text-white text-xs font-semibold border border-white/20 shadow-lg">
+              <MapPin className="w-3.5 h-3.5 text-white/90" />{getProvinceName(provinces, event.province_id)}
+            </span>
           </div>
-          <button className="flex items-center gap-1 text-xs font-bold text-white px-3 py-1.5 rounded-lg transition-all" style={{ background: color }}>
-            Save Date <ArrowRight className="w-3 h-3" />
-          </button>
+
+          <div className="absolute top-4 right-4 flex gap-2" style={{ transform: "translateZ(20px)" }}>
+            <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(event.id); }}
+              className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg hover:bg-black/50 transition-colors">
+              <Heart className={`w-4 h-4 transition-all ${isSaved ? "text-red-500 fill-red-500 scale-110" : "text-white"}`} />
+            </motion.button>
+          </div>
+
+          <div className="absolute bottom-6 left-6 right-6" style={{ transform: "translateZ(25px)" }}>
+            <div className="flex items-center justify-between mb-3">
+              {!isPast ? (
+                <div className="flex items-baseline gap-1.5">
+                  <motion.span animate={{ scale: hovered ? 1.05 : 1 }} className="font-black text-white tracking-tighter" style={{ fontSize: "3.5rem", lineHeight: 0.85 }}>{days}</motion.span>
+                  <span className="text-white/80 text-sm font-semibold uppercase tracking-wider">Days</span>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-black text-white/50 tracking-tighter" style={{ fontSize: "3.5rem", lineHeight: 0.85 }}>—</span>
+                </div>
+              )}
+
+              {isPast ? (
+                <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-white/70 text-xs font-bold border border-white/10">Ended</span>
+              ) : isNear ? (
+                <span className="px-3 py-1 rounded-full bg-white text-gray-900 text-xs font-bold shadow-lg flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500 fill-amber-500" /> Soon
+                </span>
+              ) : null}
+            </div>
+
+            <h3 className="text-white font-black mb-1.5 drop-shadow-md truncate" style={{ fontSize: "1.35rem", lineHeight: 1.25 }}>
+              {event.name_en || event.name}
+            </h3>
+            <p className="text-white/70 text-xs font-medium flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              {new Date(event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
         </div>
-      </motion.div>
+
+        <motion.div className="bg-white flex-1 p-6 relative" animate={{ y: hovered ? -2 : 0 }}>
+          <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">
+            {event.detail_en || event.detail}
+          </p>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex -space-x-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center overflow-hidden">
+                  <Image src={`https://i.pravatar.cc/100?img=${event.id + i * 5}`} alt="Attendee" width={28} height={28} />
+                </div>
+              ))}
+              <div className="w-7 h-7 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-500">+</div>
+            </div>
+            <button className="flex items-center gap-1.5 text-xs font-bold text-white px-4 py-2.5 rounded-xl shadow-md transition-transform hover:scale-105"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}dd)` }}>
+              Explore <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -507,7 +597,7 @@ export default function Home() {
   const { data: provinces = [] } = useProvinces();
   const { data: recommendedPlaces = [], isLoading: isLoadingRecommended } = useRecommendedPlaces();
   const { data: popularPlaces = [], isLoading: isLoadingPopular } = usePopularPlaces();
-  const { data: bestForSeasonPlaces = [], isLoading: isLoadingSeason } = useBestForSeasonPlaces();
+  const { data: hiddenGems = [], isLoading: isLoadingGems } = useHiddenGems();
   const { data: upcomingEvents = [], isLoading: isLoadingEvents } = useUpcomingEvents();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -611,7 +701,7 @@ export default function Home() {
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">
             <div className="flex items-start gap-4">
-              <span className="font-black text-gray-100 select-none leading-none mt-1" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>01</span>
+              <span className="font-black text-gray-200 select-none leading-none mt-1" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>01</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <motion.span animate={{ opacity: [1, 0.7, 1] }} transition={{ repeat: Infinity, duration: 2 }}
@@ -663,7 +753,7 @@ export default function Home() {
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">
             <div className="flex items-start gap-4">
-              <span className="font-black text-gray-100 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>02</span>
+              <span className="font-black text-gray-200 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>02</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-lg shadow-orange-200/60"
@@ -704,12 +794,40 @@ export default function Home() {
           )}
         </section>
 
-        {/* ═══ Section 03: Upcoming Festivals (Poster Cards) ═══ */}
+        {/* ═══ Section 03: Off the Map Hidden Gems ═══ */}
+        <section className="mb-12 py-12 px-8 -mx-8 bg-[#0a0a0a] relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 50% 0%, #059669 0%, transparent 70%)" }} />
+          <div className="relative z-10 flex items-end justify-between mb-8">
+            <div className="flex items-start gap-4">
+              <span className="font-black text-white/20 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>03</span>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-900 bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]">
+                    <Gem className="w-3.5 h-3.5" /> Off the Map
+                  </span>
+                </div>
+                <h2 className="font-extrabold text-white" style={{ fontSize: "1.6rem", lineHeight: 1.2 }}>Hidden Gems</h2>
+                <p className="text-xs text-emerald-200/60 mt-0.5">Discover Thailand's best-kept secrets</p>
+              </div>
+            </div>
+            <Link href="/explore" className="flex items-center gap-1.5 text-sm text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">
+              Explore All<ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {isLoadingGems ? <LoadingSkeleton /> : (
+            <div className="relative z-10 flex gap-5 overflow-x-auto pb-6 scrollbar-hide">
+              {hiddenGems.map((place, i) => <HiddenGemCard key={place.id} place={place} provinces={provinces} delay={i * 0.1} />)}
+            </div>
+          )}
+        </section>
+
+        {/* ═══ Section 04: Upcoming Festivals (Poster Cards) ═══ */}
         {upcomingEvents.length > 0 && (
           <section className="mb-12">
             <div className="flex items-end justify-between mb-6">
               <div className="flex items-start gap-4">
-                <span className="font-black text-gray-100 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>03</span>
+                <span className="font-black text-gray-200 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>04</span>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-md shadow-pink-200/60"
@@ -734,23 +852,6 @@ export default function Home() {
             )}
           </section>
         )}
-
-        {/* ═══ Section 04: Best for this Season ═══ */}
-        <section className="mb-12 bg-slate-50 dark:bg-slate-900 -mx-8 px-8 py-12 rounded-3xl">
-          <div className="flex items-center gap-3 mb-8">
-            <Badge variant="outline" className="px-3 py-1 text-sm bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
-              Recommended now
-            </Badge>
-            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">Best for this Season</h2>
-          </div>
-          {isLoadingSeason ? <LoadingSkeleton /> : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {bestForSeasonPlaces.slice(0, 4).map((place) => (
-                <PlaceCard3D key={place.id} place={place} provinces={provinces} />
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </main>
   );

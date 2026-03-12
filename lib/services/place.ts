@@ -12,6 +12,11 @@ export const placeService = {
     return response.data;
   },
 
+  getHiddenGems: async (): Promise<Place[]> => {
+    const response = await api.get<Place[]>('/places/hidden-gems');
+    return response.data;
+  },
+
   getBestForSeason: async (): Promise<Place[]> => {
     const response = await api.get<Place[]>('/places/best-for-season');
     return response.data;

@@ -30,6 +30,13 @@ export const usePopularPlaces = () => {
   });
 };
 
+export const useHiddenGems = () => {
+  return useQuery({
+    queryKey: ["places", "hidden-gems"],
+    queryFn: () => placeService.getHiddenGems(),
+  });
+};
+
 export const useBestForSeasonPlaces = () => {
   return useQuery({
     queryKey: ["places", "best-for-season"],
