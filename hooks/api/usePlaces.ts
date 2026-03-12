@@ -56,7 +56,7 @@ export const useAddPlaceReview = () => {
   return useMutation({
     mutationFn: ({ id, comment, rating }: { id: number; comment: string; rating: number }) => placeService.addReview(id, comment, rating),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["places", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["places", Number(variables.id)] });
     },
   });
 };

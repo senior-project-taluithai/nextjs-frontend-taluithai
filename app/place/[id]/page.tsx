@@ -185,7 +185,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const placeId = Number(id);
     const router = useRouter();
 
-    const { data: place, isLoading: isLoadingPlace, isError } = usePlace(placeId);
+    const { data: place, isLoading: isLoadingPlace, isError, refetch } = usePlace(placeId);
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoritePlace();
     const { data: isSaved = false } = useIsFavoritePlace(placeId);
@@ -227,7 +227,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const heroParallax = Math.min(scrollY * 0.35, 150);
     const heroOpacity = Math.max(1 - scrollY / 500, 0);
 
-    const reviewCount = place?.reviews?.length || 0;
+    const reviewCount = place?.place_reviews?.length || 0;
     const rating = Math.round((place?.rating || 0) * 10) / 10;
     const rank = Math.floor(Math.random() * 5) + 1; // Mock rank for the province
 
@@ -243,6 +243,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
             onSuccess: () => {
                 setComment("");
                 setUserRating(0);
+                refetch();
             }
         });
     };
@@ -316,12 +317,6 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                         >
                             <Heart className={`w-5 h-5 transition-all ${isSaved ? "fill-white scale-110" : ""}`} />
                         </motion.button>
-                        <button onClick={() => {
-                            navigator.clipboard.writeText(window.location.href);
-                            interactionService.track({ place_id: place.id, interaction_type: 'share' });
-                        }} className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-xl flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/10 shadow-lg shadow-black/10">
-                            <Share2 className="w-5 h-5" />
-                        </button>
                     </div>
                 </motion.div>
 
@@ -396,11 +391,6 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isSaved ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                                 <Heart className={`w-4 h-4 ${isSaved ? "fill-red-400" : ""}`} />
                             </motion.button>
-                            <button onClick={() => router.push("/my-trip")}
-                                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs transition-colors shadow-md shadow-emerald-200 pointer-events-none opacity-50"
-                                style={{ fontWeight: 600 }}>
-                                <Plus className="w-3.5 h-3.5" /> Add to Trip
-                            </button>
                         </div>
                     </motion.div>
                 )}
@@ -414,12 +404,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                     <div>
                         {/* Quick Stats Bar */}
                         <StaggerItem index={0}>
-                            <div className="bg-white rounded-2xl p-1 shadow-lg shadow-black/5 border border-gray-100/80 mb-6 grid grid-cols-4 gap-1">
+                            <div className="bg-white rounded-2xl p-1 shadow-lg shadow-black/5 border border-gray-100/80 mb-6 grid grid-cols-2 gap-1">
                                 {[
                                     { icon: <Star className="w-4 h-4 text-amber-400 fill-amber-400" />, label: "Rating", value: rating.toString(), sub: `${reviewCount} reviews` },
-                                    { icon: <Camera className="w-4 h-4 text-blue-500" />, label: "Photos", value: allImages.length.toString(), sub: "from visitors" },
-                                    { icon: <Users className="w-4 h-4 text-purple-500" />, label: "Visitors", value: "10K+", sub: "monthly" },
-                                    { icon: <Award className="w-4 h-4 text-emerald-500" />, label: "Rank", value: `#${rank}`, sub: province?.name_en || 'Prov' },
+                                    { icon: <Camera className="w-4 h-4 text-blue-500" />, label: "Photos", value: allImages.length.toString(), sub: "from visitors" }
                                 ].map((stat, i) => (
                                     <Tilt3DCard key={i} className="cursor-default" intensity={4}>
                                         <div className="rounded-xl p-3 hover:bg-gray-50/80 transition-colors text-center group h-full flex flex-col items-center justify-center">
@@ -641,8 +629,8 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
 
                                     {/* Reviews List */}
                                     <div className="space-y-3 mb-5">
-                                        {place.reviews && place.reviews.length > 0 ? (
-                                            place.reviews.slice().reverse().map((review: any, idx: number) => {
+                                        {place.place_reviews && place.place_reviews.length > 0 ? (
+                                            place.place_reviews.slice().reverse().map((review: any, idx: number) => {
                                                 const uName = review.user?.firstName || review.user?.email?.split('@')[0] || "Anonymous";
                                                 const avatarL = uName.charAt(0).toUpperCase();
                                                 const rawDate = new Date(review.date || Date.now());
@@ -724,6 +712,16 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
 
                             {activeTab === "tiktok" && (
                                 <motion.div key="tiktok" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.35 }}>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <Play className="w-4 h-4 text-gray-500" />
+                                            <span className="text-sm text-gray-500">TikTok Videos</span>
+                                        </div>
+                                        <button onClick={() => window.open(`https://www.tiktok.com/search?q=${encodeURIComponent(place.name_en)}`, '_blank')} className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors">
+                                            Open in TikTok
+                                            <ExternalLink className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                     {isLoadingTiktok ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                             {[...Array(2)].map((_, i) => (
@@ -802,11 +800,12 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className="w-full py-3.5 rounded-2xl text-sm bg-[#0f1923] text-white hover:bg-[#162636] transition-all shadow-lg shadow-gray-300/30 flex items-center justify-center gap-2.5 opacity-50 cursor-not-allowed"
+                                    onClick={() => router.push("/ai-planner")}
+                                    className="w-full py-3.5 rounded-2xl text-sm bg-[#0f1923] text-white hover:bg-[#162636] transition-all shadow-lg shadow-gray-300/30 flex items-center justify-center gap-2.5"
                                     style={{ fontWeight: 600 }}
                                 >
-                                    <Plus className="w-4 h-4" />
-                                    Add to Trip
+                                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                                    Plan Trip with AI
                                 </motion.button>
                             </div>
                         </StaggerItem>

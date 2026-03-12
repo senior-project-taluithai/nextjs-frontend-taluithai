@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
 import {
-    Loader2, MapPin, Star, Heart, Share2, ArrowLeft, Plus, Clock, Camera, Globe, Tag, Info, ThumbsUp, X, ChevronLeft, ChevronRight, Maximize2, Play, Calendar, Gem, Users, Navigation2, MessageSquare, Send
+    Loader2, MapPin, Star, Heart, Share2, ArrowLeft, Plus, Clock, Camera, Globe, Tag, Info, ThumbsUp, X, ChevronLeft, ChevronRight, Maximize2, Play, Calendar, Gem, Users, Navigation2, MessageSquare, Send, Sparkles, ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useEvent, useAddEventReview } from "@/hooks/api/useEvents";
@@ -169,7 +169,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const eventId = Number(id);
     const router = useRouter();
 
-    const { data: event, isLoading: isLoadingEvent, isError } = useEvent(eventId);
+    const { data: event, isLoading: isLoadingEvent, isError, refetch } = useEvent(eventId);
     const { data: provinces = [] } = useProvinces();
     const { mutate: toggleFavorite } = useToggleFavoriteEvent();
     const { data: isSaved = false } = useIsFavoriteEvent(eventId);
@@ -207,7 +207,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const heroParallax = Math.min(scrollY * 0.35, 150);
     const heroOpacity = Math.max(1 - scrollY / 500, 0);
 
-    const reviewCount = event?.reviews?.length || 0;
+    const reviewCount = event?.event_reviews?.length || 0;
     const rating = Math.round((event?.rating || 0) * 10) / 10;
     const rank = Math.floor(Math.random() * 5) + 1; // Mock rank for the province
 
@@ -232,6 +232,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             onSuccess: () => {
                 setComment("");
                 setUserRating(0);
+                refetch();
             }
         });
     };
@@ -305,12 +306,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         >
                             <Heart className={`w-5 h-5 transition-all ${isSaved ? "fill-white scale-110" : ""}`} />
                         </motion.button>
-                        <button onClick={() => {
-                            navigator.clipboard.writeText(window.location.href);
-                            interactionService.track({ event_id: event.id, interaction_type: 'share' });
-                        }} className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-xl flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/10 shadow-lg shadow-black/10">
-                            <Share2 className="w-5 h-5" />
-                        </button>
                     </div>
                 </motion.div>
 
@@ -399,11 +394,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isSaved ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                                 <Heart className={`w-4 h-4 ${isSaved ? "fill-red-400" : ""}`} />
                             </motion.button>
-                            <button onClick={() => router.push("/my-trip")}
-                                className="flex items-center gap-1.5 bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-xl text-xs transition-colors shadow-md shadow-pink-200 pointer-events-none opacity-50"
-                                style={{ fontWeight: 600 }}>
-                                <Plus className="w-3.5 h-3.5" /> Add to Trip
-                            </button>
                         </div>
                     </motion.div>
                 )}
@@ -417,11 +407,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <div>
                         {/* Quick Stats Bar */}
                         <StaggerItem index={0}>
-                            <div className="bg-white rounded-2xl p-1 shadow-lg shadow-black/5 border border-gray-100/80 mb-6 grid grid-cols-4 gap-1">
+                            <div className="bg-white rounded-2xl p-1 shadow-lg shadow-black/5 border border-gray-100/80 mb-6 grid grid-cols-3 gap-1">
                                 {[
                                     { icon: <Star className="w-4 h-4 text-amber-400 fill-amber-400" />, label: "Rating", value: rating.toString(), sub: `${reviewCount} reviews` },
                                     { icon: <Calendar className="w-4 h-4 text-pink-500" />, label: "Duration", value: durationText, sub: "Event length" },
-                                    { icon: <Users className="w-4 h-4 text-purple-500" />, label: "Attendees", value: "5K+", sub: "expected" },
                                     { icon: <Globe className="w-4 h-4 text-emerald-500" />, label: "Province", value: province?.name_en || 'Prov', sub: "Location" },
                                 ].map((stat, i) => (
                                     <Tilt3DCard key={i} className="cursor-default" intensity={4}>
@@ -616,8 +605,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
                                     {/* Reviews List */}
                                     <div className="space-y-3 mb-5">
-                                        {event.reviews && event.reviews.length > 0 ? (
-                                            event.reviews.slice().reverse().map((review: any, idx: number) => {
+                                        {event.event_reviews && event.event_reviews.length > 0 ? (
+                                            event.event_reviews.slice().reverse().map((review: any, idx: number) => {
                                                 const uName = review.user?.firstName || review.user?.email?.split('@')[0] || "Anonymous";
                                                 const avatarL = uName.charAt(0).toUpperCase();
                                                 const rawDate = new Date(review.date || Date.now());
@@ -749,11 +738,23 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className="w-full py-3.5 rounded-2xl text-sm bg-[#0f1923] text-white hover:bg-[#162636] transition-all shadow-lg shadow-gray-300/30 flex items-center justify-center gap-2.5 opacity-50 cursor-not-allowed"
+                                    onClick={() => router.push("/ai-planner")}
+                                    className="w-full py-3.5 rounded-2xl text-sm bg-[#0f1923] text-white hover:bg-[#162636] transition-all shadow-lg shadow-gray-300/30 flex items-center justify-center gap-2.5"
                                     style={{ fontWeight: 600 }}
                                 >
-                                    <Plus className="w-4 h-4" />
-                                    Add to Trip
+                                    <Sparkles className="w-4 h-4 text-pink-400" />
+                                    Plan Trip with AI
+                                </motion.button>
+
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => window.open(`https://www.tiktok.com/search?q=${encodeURIComponent(event.name_en)}`, '_blank')}
+                                    className="w-full py-3.5 rounded-2xl text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2.5"
+                                    style={{ fontWeight: 600 }}
+                                >
+                                    <ExternalLink className="w-4 h-4 text-gray-500" />
+                                    Open in TikTok
                                 </motion.button>
                             </div>
                         </StaggerItem>

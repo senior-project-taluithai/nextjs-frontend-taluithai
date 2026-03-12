@@ -12,7 +12,7 @@ export interface Place {
   thumbnail_url: string;
   image_urls: string[];
   categories: string[];
-  reviews?: any[];
+  place_reviews?: any[];
 }
 
 export interface ExplorePlacesQuery {
