@@ -462,11 +462,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                                 </div>
                                                 <h3 className="text-gray-900" style={{ fontWeight: 700 }}>About this Event</h3>
                                             </div>
-                                            <p className="text-gray-600 leading-relaxed text-sm mb-4 whitespace-pre-line">{event.detail_en || event.detail}</p>
-                                            {event.detail_en && event.detail_en !== event.detail && (
-                                                <p className="text-gray-400 leading-relaxed text-sm italic border-l-2 border-pink-200 pl-3">
-                                                    {event.detail}
-                                                </p>
+                                            {!(event.detail_en || event.detail) ? (
+                                                <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-4 flex items-center justify-center text-center mb-4">
+                                                    <div className="flex flex-col items-center">
+                                                        <Info className="w-5 h-5 text-pink-400 mb-1.5" />
+                                                        <span className="text-sm font-medium text-gray-500">No information available for this event yet.</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <p className="text-gray-600 leading-relaxed text-sm mb-4 whitespace-pre-line">{event.detail_en || event.detail}</p>
+                                                    {event.detail_en && event.detail_en !== event.detail && (
+                                                        <p className="text-gray-400 leading-relaxed text-sm italic border-l-2 border-pink-200 pl-3 mb-4">
+                                                            {event.detail}
+                                                        </p>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </Tilt3DCard>

@@ -485,11 +485,22 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                                                 </div>
                                                 <h3 className="text-gray-900" style={{ fontWeight: 700 }}>About this Place</h3>
                                             </div>
-                                            <p className="text-gray-600 leading-relaxed text-sm mb-4 whitespace-pre-line">{place.detail_en || place.detail}</p>
-                                            {place.detail_en && place.detail_en !== place.detail && (
-                                                <p className="text-gray-400 leading-relaxed text-sm italic border-l-2 border-emerald-200 pl-3">
-                                                    {place.detail}
-                                                </p>
+                                            {!(place.detail_en || place.detail) ? (
+                                                <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-4 flex items-center justify-center text-center mb-4">
+                                                    <div className="flex flex-col items-center">
+                                                        <Info className="w-5 h-5 text-emerald-400 mb-1.5" />
+                                                        <span className="text-sm font-medium text-gray-500">No information available for this place yet.</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <p className="text-gray-600 leading-relaxed text-sm mb-4 whitespace-pre-line">{place.detail_en || place.detail}</p>
+                                                    {place.detail_en && place.detail_en !== place.detail && (
+                                                        <p className="text-gray-400 leading-relaxed text-sm italic border-l-2 border-emerald-200 pl-3 mb-4">
+                                                            {place.detail}
+                                                        </p>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </Tilt3DCard>
