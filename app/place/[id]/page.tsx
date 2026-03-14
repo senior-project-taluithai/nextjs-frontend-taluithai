@@ -216,8 +216,13 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const province = provinces.find(p => p.id === place.province_id);
 
     // Extract primary images
-    const allImages = place.image_urls && place.image_urls.length > 0 ? place.image_urls : [place.thumbnail_url];
-    const coverImage = place.thumbnail_url || (place.image_urls && place.image_urls[0]) || '/placeholder.svg';
+    const allImages = (place.image_urls || []).filter(u => u && u.trim() !== "");
+    if (allImages.length === 0 && place.thumbnail_url && place.thumbnail_url.trim() !== "") {
+        allImages.push(place.thumbnail_url);
+    }
+    const coverImage = (place.thumbnail_url && place.thumbnail_url.trim() !== "")
+        ? place.thumbnail_url
+        : (allImages[0] || '/placeholder.svg');
 
     const seasonStr = place.best_season || "all";
     const seasonInfo = SEASON_INFO[seasonStr.toLowerCase()] || SEASON_INFO.all;

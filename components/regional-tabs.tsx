@@ -69,7 +69,7 @@ function PaginatedProvinceGrid({ provinces }: { provinces: Province[] }) {
                     <Link href={`#`} key={province.id} className="group cursor-pointer">
                         <div className="relative aspect-[4/3] rounded-xl overflow-hidden mb-3">
                             <Image
-                                src={province.image_url}
+                                src={province.image_url || "/placeholder.svg"}
                                 alt={province.name}
                                 fill
                                 className="object-cover group-hover:scale-110 transition-transform duration-500"

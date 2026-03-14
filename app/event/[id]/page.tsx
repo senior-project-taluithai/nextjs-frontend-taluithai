@@ -198,8 +198,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const province = provinces.find(p => p.id === event.province_id);
 
     // Extract primary images
-    const allImages = event.image_urls && event.image_urls.length > 0 ? event.image_urls : [event.thumbnail_url];
-    const coverImage = event.thumbnail_url || (event.image_urls && event.image_urls[0]) || '/placeholder.svg';
+    const allImages = (event.image_urls || []).filter(u => u && u.trim() !== "");
+    if (allImages.length === 0 && event.thumbnail_url && event.thumbnail_url.trim() !== "") {
+        allImages.push(event.thumbnail_url);
+    }
+    const coverImage = (event.thumbnail_url && event.thumbnail_url.trim() !== "")
+        ? event.thumbnail_url
+        : (allImages[0] || '/placeholder.svg');
 
     const primaryCategory = event.categories[0] || 'Event';
     const emoji = getEmojiForCategory(primaryCategory);

@@ -2,14 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { TripDto } from "@/lib/mock-data";
-import { Plus, Clock, CheckCircle2, FileEdit, ChevronDown, ChevronUp, MapPin, CalendarDays, Loader2, Trash2, MoreVertical } from "lucide-react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Map, Calendar, MapPin, Clock, Edit2, Trash2, Share2, MoreHorizontal, ChevronRight, Navigation, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useTrips, useDeleteTrip } from "@/hooks/api/useTrips";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
     DropdownMenu,
@@ -27,22 +23,78 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { TripDto } from "@/lib/mock-data";
+
+const statusConfig: Record<string, { label: string; color: string; bg: string; dot: string }> = {
+    draft: { label: "Draft", color: "text-gray-600", bg: "bg-gray-100 border-gray-200", dot: "bg-gray-400" },
+    planned: { label: "Planned", color: "text-blue-600", bg: "bg-blue-50 border-blue-100", dot: "bg-blue-500" },
+    upcoming: { label: "Upcoming", color: "text-amber-600", bg: "bg-amber-50 border-amber-100", dot: "bg-amber-500" },
+    completed: { label: "Completed", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100", dot: "bg-emerald-500" },
+};
 
 export default function MyTripsPage() {
     const router = useRouter();
-    const [openCompleted, setOpenCompleted] = useState(false);
+    const [activeFilter, setActiveFilter] = useState<"all" | "draft" | "planned" | "upcoming" | "completed">("all");
+    const [hoveredId, setHoveredId] = useState<number | null>(null);
     const [tripToDelete, setTripToDelete] = useState<{ id: number; name: string } | null>(null);
 
-    const { data: trips, isLoading, error } = useTrips();
+    const { data: rawTrips, isLoading, error } = useTrips();
     const deleteTrip = useDeleteTrip();
 
-    const sortedTrips = useMemo(() => {
-        if (!trips) return { drafts: [], upcoming: [], completed: [] };
+    // Map the raw API data to the format expected by the new UI
+    const trips = useMemo(() => {
+        if (!rawTrips) return [];
 
-        const drafts = trips.filter(t => t.status === 'draft');
-        const upcoming = trips.filter(t => t.status === 'upcoming');
-        const completed = trips.filter(t => t.status === 'completed');
-        return { drafts, upcoming, completed };
+        return rawTrips.map(t => {
+            const start = new Date(t.start_date);
+            const end = new Date(t.end_date);
+            const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+            // Format destination (provinces)
+            const destination = t.provinces && t.provinces.length > 0
+                ? t.provinces.map(p => p.name_en).join(", ")
+                : "Multiple Destinations";
+
+            // Cover image fallback
+            const coverImage = t.provinces && t.provinces.length > 0 && t.provinces[0].image_url
+                ? t.provinces[0].image_url
+                : "https://picsum.photos/1000/600?grayscale"; // Fallback image
+
+            // Calculate total estimated budget from items if available (defaulting to 0 for now as it needs deep items fetch, could mock it or calculate if day items are embedded)
+            // Assuming for now it's 0 or we mock it, or if it's available in the DTO
+            const budget = 0; // The API doesn't return total cost in the basic DTO yet
+
+            // Calculate total places planned
+            // The API doesn't return total places in the basic DTO yet, defaulting to 0 or estimating based on days
+            const placesCount = (t as any).TripDays ? (t as any).TripDays.reduce((acc: number, day: any) => acc + (day.items?.length || 0), 0) : 0;
+
+            const dateStr = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+            return {
+                id: t.id,
+                title: t.name,
+                destination: destination,
+                days: days,
+                places: placesCount,
+                status: t.status as "draft" | "planned" | "upcoming" | "completed",
+                date: dateStr,
+                coverImage: coverImage,
+                budget: budget > 0 ? `฿${budget.toLocaleString()}` : "Budget TBD",
+                rawItem: t
+            };
+        });
+    }, [rawTrips]);
+
+    const filtered = activeFilter === "all" ? trips : trips.filter((t) => t.status === activeFilter);
+
+    // Calculate overall stats
+    const stats = useMemo(() => {
+        return [
+            { label: "Total Trips", value: trips.length, icon: "🗺️" },
+            { label: "Places Visited", value: trips.reduce((s, t) => s + t.places, 0) || "-", icon: "📍" }, // Might need deeper data for real places count
+            { label: "Days Traveled", value: trips.reduce((s, t) => s + t.days, 0), icon: "📅" },
+            { label: "Completed", value: trips.filter((t) => t.status === "completed").length, icon: "✅" },
+        ];
     }, [trips]);
 
     const handleDeleteClick = (tripId: number, tripName: string, e: React.MouseEvent) => {
@@ -64,11 +116,12 @@ export default function MyTripsPage() {
         }
     };
 
+
     if (isLoading) {
         return (
-            <div className="container mx-auto px-4 py-8 min-h-screen max-w-5xl flex items-center justify-center">
+            <div className="flex-1 overflow-y-auto bg-[#f8f9fa] flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-emerald-500" />
                     <p className="text-muted-foreground">Loading your trips...</p>
                 </div>
             </div>
@@ -77,219 +130,263 @@ export default function MyTripsPage() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 min-h-screen max-w-5xl flex items-center justify-center">
+            <div className="flex-1 overflow-y-auto bg-[#f8f9fa] flex items-center justify-center min-h-screen">
                 <div className="text-center">
                     <p className="text-destructive mb-4">Failed to load trips</p>
-                    <Button onClick={() => window.location.reload()}>Retry</Button>
+                    <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
                 </div>
             </div>
         );
     }
 
     return (
-        <>
-            <div className="container mx-auto px-4 py-8 min-h-screen max-w-5xl">
-                <div className="flex justify-between items-center mb-8">
+        <div className="flex-1 overflow-y-auto bg-[#f8f9fa] min-h-screen">
+            <div className="px-8 py-8 max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold">My Trips</h1>
-                        <p className="text-muted-foreground mt-1">Manage all your travel plans in one place</p>
+                        <h1 className="text-gray-900 mb-1" style={{ fontSize: "1.875rem", fontWeight: 700 }}>My Trips</h1>
+                        <p className="text-gray-500">Manage and review your Thailand adventures</p>
                     </div>
-                    <Button onClick={() => router.push('/my-trip/new')} className="gap-2">
+                    <button
+                        onClick={() => router.push('/my-trip/new')}
+                        className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl font-medium transition-colors shadow-md shadow-emerald-200"
+                    >
                         <Plus className="w-4 h-4" />
                         New Trip
-                    </Button>
+                    </button>
                 </div>
 
-                {!trips || trips.length === 0 ? (
-                    <div className="text-center py-16">
-                        <FileEdit className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                        <h2 className="text-2xl font-semibold mb-2">No trips yet</h2>
-                        <p className="text-muted-foreground mb-6">Start planning your next adventure!</p>
-                        <Button onClick={() => router.push('/my-trip/new')} className="gap-2">
+                {/* Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                    {stats.map((stat, i) => (
+                        <motion.div
+                            key={stat.label}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, delay: i * 0.1 }}
+                            className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center"
+                        >
+                            <p className="text-2xl mb-1">{stat.icon}</p>
+                            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* Filter tabs */}
+                <div className="flex gap-2 mb-6 flex-wrap">
+                    {(["all", "draft", "planned", "upcoming", "completed"] as const).map((filter) => (
+                        <button
+                            key={filter}
+                            onClick={() => setActiveFilter(filter)}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all duration-200 ${activeFilter === filter
+                                ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
+                                : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300"
+                                }`}
+                        >
+                            {filter}
+                            {filter !== "all" && (
+                                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeFilter === filter ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                                    {trips.filter((t) => t.status === filter).length}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Trip cards grid */}
+                {trips.length === 0 ? (
+                    <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
+                        <Map className="w-16 h-16 mx-auto mb-4 text-emerald-200" />
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">No trips yet</h2>
+                        <p className="text-gray-500 mb-6 max-w-md mx-auto">Start planning your next adventure in Thailand! Discover amazing places and create your perfect itinerary.</p>
+                        <button
+                            onClick={() => router.push('/my-trip/new')}
+                            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium transition-colors shadow-md shadow-emerald-200 mx-auto"
+                        >
                             <Plus className="w-4 h-4" />
-                            Create Your First Trip
-                        </Button>
+                            Plan Your First Trip
+                        </button>
                     </div>
                 ) : (
-                    <div className="space-y-10">
-                        {/* Drafts Section - Highest Priority */}
-                        {sortedTrips.drafts.length > 0 && (
-                            <section>
-                                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                                    <FileEdit className="w-5 h-5 text-indigo-500" />
-                                    Drafts
-                                </h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {sortedTrips.drafts.map(trip => (
-                                        <TripCard key={trip.id} trip={trip} onDeleteClick={handleDeleteClick} />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                        {filtered.map((trip, i) => {
+                            const sc = statusConfig[trip.status] || statusConfig.draft;
+                            return (
+                                <motion.div
+                                    key={trip.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: i * 0.08 }}
+                                    whileHover={{ y: -4 }}
+                                    onHoverStart={() => setHoveredId(trip.id)}
+                                    onHoverEnd={() => setHoveredId(null)}
+                                >
+                                    <div
+                                        className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group h-full flex flex-col"
+                                        onClick={() => router.push(`/my-trip/${trip.id}`)}
+                                    >
+                                        {/* Cover image */}
+                                        <div className="relative h-44 overflow-hidden shrink-0">
+                                            <img
+                                                src={trip.coverImage || undefined}
+                                                alt={trip.title}
+                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
 
-                        {/* Upcoming Section */}
-                        {sortedTrips.upcoming.length > 0 && (
-                            <section>
-                                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                                    <Clock className="w-5 h-5 text-blue-500" />
-                                    Upcoming
-                                </h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {sortedTrips.upcoming.map(trip => (
-                                        <TripCard key={trip.id} trip={trip} onDeleteClick={handleDeleteClick} />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
+                                            {/* Status badge */}
+                                            <div className="absolute top-3 left-3">
+                                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${sc.bg} ${sc.color}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                                                    {sc.label}
+                                                </span>
+                                            </div>
 
-                        {/* Completed Section - Collapsible */}
-                        {sortedTrips.completed.length > 0 && (
-                            <Collapsible open={openCompleted} onOpenChange={setOpenCompleted}>
-                                <section>
-                                    <CollapsibleTrigger asChild>
-                                        <Button variant="ghost" className="w-full justify-start p-0 h-auto hover:bg-transparent mb-4">
-                                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                                Completed ({sortedTrips.completed.length})
-                                                {openCompleted ? <ChevronUp className="w-4 h-4 ml-2" /> : <ChevronDown className="w-4 h-4 ml-2" />}
-                                            </h2>
-                                        </Button>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {sortedTrips.completed.map(trip => (
-                                                <TripCard key={trip.id} trip={trip} onDeleteClick={handleDeleteClick} />
-                                            ))}
+                                            {/* Actions Menu */}
+                                            <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button
+                                                            className="w-8 h-8 rounded-lg bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+                                                        >
+                                                            <MoreHorizontal className="w-4 h-4" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive cursor-pointer"
+                                                            onClick={(e) => handleDeleteClick(trip.id, trip.title, e)}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete Trip
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+
+                                            {/* Budget (Optional, depends on data) */}
+                                            {trip.budget !== "Budget TBD" && (
+                                                <div className="absolute bottom-3 right-3 bg-black/50 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+                                                    {trip.budget}
+                                                </div>
+                                            )}
+
+                                            {/* Hover: View overlay */}
+                                            <AnimatePresence>
+                                                {hoveredId === trip.id && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        className="absolute inset-0 bg-emerald-500/20 backdrop-blur-[1px] flex items-center justify-center"
+                                                    >
+                                                        <div className="bg-white rounded-xl px-4 py-2.5 flex items-center gap-2 shadow-xl">
+                                                            <span className="text-sm font-bold text-gray-900">Open Trip</span>
+                                                            <ChevronRight className="w-4 h-4 text-emerald-500" />
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
-                                    </CollapsibleContent>
-                                </section>
-                            </Collapsible>
-                        )}
+
+                                        {/* Content */}
+                                        <div className="p-4 flex flex-col flex-1">
+                                            <h3 className="font-bold text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors line-clamp-1">
+                                                {trip.title}
+                                            </h3>
+                                            <div className="flex items-center gap-1 text-gray-400 text-xs mb-3">
+                                                <MapPin className="w-3 h-3 shrink-0" />
+                                                <span className="line-clamp-1">{trip.destination}</span>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                                                <span className="flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3 text-emerald-500" />
+                                                    {trip.days} days
+                                                </span>
+                                                {trip.places > 0 && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Map className="w-3 h-3 text-emerald-500" />
+                                                        {trip.places} places
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="text-xs text-gray-400 mb-4 flex items-center gap-1 flex-1">
+                                                <Clock className="w-3 h-3" />
+                                                {trip.date}
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-2 mt-auto">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); router.push(`/my-trip/${trip.id}`); }}
+                                                    className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded-xl text-xs font-medium transition-colors"
+                                                >
+                                                    <Map className="w-3.5 h-3.5" />
+                                                    View Trip
+                                                </button>
+                                                {/* Optimizer Stub for later 
+                                            <button
+                                                className="w-9 h-9 flex items-center justify-center bg-gray-50 hover:bg-emerald-50 hover:text-emerald-600 text-gray-500 rounded-xl transition-colors shrink-0"
+                                                title="Route Optimizer"
+                                                onClick={(e) => { e.stopPropagation(); router.push(`/my-trip/${trip.id}?tab=route`); }}
+                                            >
+                                                <Navigation className="w-3.5 h-3.5" />
+                                            </button>
+                                            */}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+
+                        {/* New trip card */}
+                        <motion.button
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, delay: filtered.length * 0.08 }}
+                            onClick={() => router.push("/my-trip/new")}
+                            className="bg-white rounded-2xl border-2 border-dashed border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all duration-300 flex flex-col items-center justify-center gap-3 p-8 min-h-[340px] group h-full"
+                        >
+                            <div className="w-12 h-12 rounded-2xl bg-gray-100 group-hover:bg-emerald-100 flex items-center justify-center transition-colors">
+                                <Plus className="w-6 h-6 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                            </div>
+                            <p className="text-sm font-medium text-gray-400 group-hover:text-emerald-600 transition-colors">
+                                Plan a new trip
+                            </p>
+                            <p className="text-xs text-gray-300 group-hover:text-emerald-400 transition-colors text-center px-4">
+                                Create your perfect Thailand itinerary
+                            </p>
+                        </motion.button>
                     </div>
                 )}
             </div>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!tripToDelete} onOpenChange={(open) => !open && setTripToDelete(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent className="rounded-2xl border-gray-100">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Trip</AlertDialogTitle>
+                        <AlertDialogTitle>Delete Trip?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete <span className="font-semibold">"{tripToDelete?.name}"</span>?
-                            This action cannot be undone and will permanently delete all trip data including itinerary and saved places.
+                            Are you sure you want to delete <span className="font-semibold text-gray-900">"{tripToDelete?.name}"</span>?
+                            This action cannot be undone and will permanently delete all trip data.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogFooter className="gap-2 sm:gap-0 mt-2">
+                        <AlertDialogCancel className="rounded-xl border-gray-200 hover:bg-gray-50 hover:text-gray-900">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleConfirmDelete}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-sm shadow-red-200"
                         >
-                            Delete
+                            Delete Trip
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </>
-    );
-}
-
-function TripCard({ trip, onDeleteClick }: { trip: TripDto; onDeleteClick: (id: number, name: string, e: React.MouseEvent) => void }) {
-    const statusColors = {
-        draft: 'bg-gray-100 text-gray-700 border-gray-300',
-        upcoming: 'bg-blue-100 text-blue-700 border-blue-300',
-        completed: 'bg-green-100 text-green-700 border-green-300',
-    };
-
-    // Format province names
-    const provinceNames = trip.provinces.map(p => p.name_en).join(", ");
-
-    // Use first province's image as cover, or fallback
-    const cover_image = trip.provinces[0]?.image_url || "https://picsum.photos/1000/600?grayscale";
-
-    // Calculate trip duration
-    const start = new Date(trip.start_date);
-    const end = new Date(trip.end_date);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-    return (
-        <div className="group relative overflow-hidden rounded-xl border bg-card hover:shadow-lg transition-all">
-            {/* Province count badge for multi-province trips */}
-            {trip.provinces.length > 1 && (
-                <div className="absolute top-2 left-2 z-10">
-                    <Badge className="bg-primary/90 hover:bg-primary shadow-sm text-xs">
-                        {trip.provinces.length} Provinces
-                    </Badge>
-                </div>
-            )}
-
-            {/* Actions Menu */}
-            <div className="absolute top-2 right-2 z-10">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="secondary"
-                            size="icon"
-                            className="h-8 w-8 bg-white/90 hover:bg-white shadow-sm"
-                            onClick={(e) => e.preventDefault()}
-                        >
-                            <MoreVertical className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={(e) => onDeleteClick(trip.id, trip.name, e)}
-                        >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete Trip
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-
-            <Link href={`/my-trip/${trip.id}`}>
-                {/* Cover Image */}
-                <div className="relative h-48 overflow-hidden">
-                    <img
-                        src={cover_image}
-                        alt={trip.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                </div>
-
-                {/* Content */}
-                <div className="p-4 space-y-3">
-                    <div>
-                        <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-primary transition-colors">
-                            {trip.name}
-                        </h3>
-                    </div>
-
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                        {provinceNames && (
-                            <div className="flex items-center gap-2">
-                                <MapPin className="w-4 h-4 shrink-0" />
-                                <span className="line-clamp-1">{provinceNames}</span>
-                            </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <CalendarDays className="w-4 h-4 shrink-0" />
-                            <span>
-                                {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                <span className="text-xs ml-1">({days} {days === 1 ? 'day' : 'days'})</span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="pt-2">
-                        <Badge variant="outline" className={cn("capitalize text-xs", statusColors[trip.status])}>
-                            {trip.status}
-                        </Badge>
-                    </div>
-                </div>
-            </Link>
         </div>
     );
 }
