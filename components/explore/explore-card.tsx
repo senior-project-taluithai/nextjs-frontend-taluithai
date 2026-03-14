@@ -33,32 +33,7 @@ const CAT_ACCENT: Record<string, { bg: string; text: string; border: string; dot
 };
 const catAccent = (c: string) => CAT_ACCENT[c] ?? { bg: "bg-slate-50 dark:bg-slate-900/50", text: "text-slate-700 dark:text-slate-300", border: "border-slate-200 dark:border-slate-800", dot: "#64748b", glow: "rgba(100,116,139,0.15)" };
 
-function getMatchScore(item: Place | Event, type: "place" | "event") {
-    let s = 65;
-    s += Math.min((item.rating - 3) / 2 * 25, 25);
-    const reviewsCount = (type === 'place' ? (item as Place).place_reviews?.length : (item as Event).event_reviews?.length) || 0;
-    s += Math.min(reviewsCount * 2, 10);
-    if (type === 'place' && (item as Place).best_season !== 'all_year') s += 5;
-    return Math.min(Math.round(s), 99);
-}
 
-/* ── Animated match score ring ── */
-function MatchScoreRing({ score }: { score: number }) {
-    const r = 18, circ = 2 * Math.PI * r;
-    return (
-        <div className="relative flex items-center justify-center" style={{ width: 44, height: 44 }}>
-            <svg className="-rotate-90" width={44} height={44} style={{ position: "absolute" }}>
-                <circle cx={22} cy={22} r={r} stroke="rgba(255,255,255,0.15)" strokeWidth={3} fill="none" />
-                <motion.circle cx={22} cy={22} r={r} stroke="white" strokeWidth={3} fill="none"
-                    strokeLinecap="round" strokeDasharray={circ}
-                    initial={{ strokeDashoffset: circ }}
-                    animate={{ strokeDashoffset: circ - (score / 100) * circ }}
-                    transition={{ duration: 1.2, delay: 0.3, ease: "easeOut" }} />
-            </svg>
-            <span className="relative z-10 text-white" style={{ fontSize: "0.6rem", fontWeight: 800 }}>{score}%</span>
-        </div>
-    );
-}
 
 /* ── 3D Tilt Card Component ── */
 function Tilt3DCard({ children, className = "", intensity = 6 }: { children: React.ReactNode; className?: string; intensity?: number }) {
@@ -119,7 +94,7 @@ export function ExploreCard({ item, type, index = 0 }: ExploreCardProps) {
 
     const bestSeason = type === 'place' ? (item as Place).best_season : null;
     const accent = catAccent(category);
-    const score = getMatchScore(item, type);
+
 
     const tags = item.categories || [];
 
@@ -173,10 +148,7 @@ export function ExploreCard({ item, type, index = 0 }: ExploreCardProps) {
                             </motion.div>
                         )}
 
-                        {/* Match score ring - top right */}
-                        <div className="absolute top-3 right-3 z-10">
-                            <MatchScoreRing score={score} />
-                        </div>
+
 
                         {/* Bottom overlay content */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 z-10 pointer-events-none">

@@ -88,46 +88,7 @@ function use3DTilt(intensity = 10) {
   return { ref, rotateX, rotateY, glarePos, onMove, onLeave };
 }
 
-/* ══════════════════════════════════════════════
-   ANIMATED MATCH SCORE
-══════════════════════════════════════════════ */
-function AnimatedScore({ score, size = "lg" }: { score: number; size?: "lg" | "sm" }) {
-  const [displayed, setDisplayed] = useState(0);
-  const r = size === "lg" ? 26 : 18;
-  const circ = 2 * Math.PI * r;
-  useEffect(() => {
-    let start = 0;
-    const step = () => {
-      start += 2;
-      if (start <= score) { setDisplayed(start); requestAnimationFrame(step); }
-      else setDisplayed(score);
-    };
-    const timer = setTimeout(() => requestAnimationFrame(step), 400);
-    return () => clearTimeout(timer);
-  }, [score]);
-  const dash = (displayed / 100) * circ;
-  const dim = size === "lg" ? 68 : 48;
-  const fontSize = size === "lg" ? "0.75rem" : "0.6rem";
-  return (
-    <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
-      <svg className="-rotate-90" width={dim} height={dim} style={{ position: "absolute" }}>
-        <circle cx={dim / 2} cy={dim / 2} r={r} stroke="rgba(255,255,255,0.15)" strokeWidth={size === "lg" ? 4 : 3} fill="none" />
-        <circle cx={dim / 2} cy={dim / 2} r={r} stroke="white" strokeWidth={size === "lg" ? 4 : 3} fill="none"
-          strokeDasharray={circ} strokeDashoffset={circ - dash} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.05s linear" }}
-        />
-      </svg>
-      <span className="relative z-10 font-extrabold text-white" style={{ fontSize }}>{displayed}%</span>
-    </div>
-  );
-}
 
-function getMatchScore(place: Place): number {
-  let score = 55;
-  score += Math.min(((place.rating || 4) - 3) / 2 * 25, 25);
-  score += 8; // season bonus
-  return Math.min(Math.round(score), 99);
-}
 
 /* ═══════════════════════════════════════════════════
    PLACE CARD (3-D tilt + holographic glare)
@@ -220,7 +181,7 @@ function HeroCard({ place, provinces, index }: { place: Place; provinces: Provin
   const { mutate: toggleFavorite } = useToggleFavoritePlace();
   const [hovered, setHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  const score = getMatchScore(place);
+
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [4, -4]), { stiffness: 200, damping: 20 });
@@ -251,7 +212,7 @@ function HeroCard({ place, provinces, index }: { place: Place; provinces: Provin
           <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-white/15 text-white border border-white/25 backdrop-blur-md">
             {place.categories[0] || "Place"}
           </span>
-          <AnimatedScore score={score} size="lg" />
+
         </div>
         <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
           className="absolute top-14 right-4 w-9 h-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-white/25 transition-colors">
@@ -280,7 +241,7 @@ function HeroCard({ place, provinces, index }: { place: Place; provinces: Provin
 function RankCard({ place, provinces, rank, delay }: { place: Place; provinces: Province[]; rank: number; delay: number }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
-  const score = getMatchScore(place);
+
 
   return (
     <motion.div
@@ -299,7 +260,7 @@ function RankCard({ place, provinces, rank, delay }: { place: Place; provinces: 
         <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.28)" }}>
           <span className="font-black text-white/30 select-none" style={{ fontSize: "4rem", lineHeight: 1 }}>{rank}</span>
         </div>
-        <div className="absolute top-2 right-2"><AnimatedScore score={score} size="sm" /></div>
+
       </div>
       <div className="flex-1 px-4 py-3 flex flex-col justify-between min-w-0">
         <div>
