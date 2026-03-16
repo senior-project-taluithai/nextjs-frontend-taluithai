@@ -16,6 +16,7 @@ export interface Event {
   image_urls: string[];
   categories: string[];
   event_reviews?: any[];
+  review_count: number;
 }
 
 export interface ExploreEventsQuery {
@@ -26,6 +27,8 @@ export interface ExploreEventsQuery {
   minRating?: number;
   page?: number;
   limit?: number;
+  orderField?: string;
+  orderDir?: 'ASC' | 'DESC';
 }
 
 export type CreateEventDto = Omit<Event, 'id' | 'rating'>;

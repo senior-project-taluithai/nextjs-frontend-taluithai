@@ -211,7 +211,7 @@ export function ExploreCard({ item, type, index = 0 }: ExploreCardProps) {
                                 <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                                 <span className="text-sm text-slate-900 dark:text-slate-100" style={{ fontWeight: 800 }}>{rating}</span>
                                 <span className="text-xs text-slate-400">
-                                    ({type === 'place' ? ((item as Place).place_reviews?.length || 0) : ((item as Event).event_reviews?.length || 0)})
+                                    ({item.review_count || 0})
                                 </span>
                             </div>
                         </div>

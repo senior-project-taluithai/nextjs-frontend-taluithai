@@ -174,10 +174,12 @@ export default function ExplorePage() {
         total: Number(currentData?.total) || 0,
         page: Number(currentData?.page) || 1,
         lastPage: Number(currentData?.last_page) || 1,
+        avgRating: currentData?.avgRating || "0.0",
+        totalReviews: currentData?.totalReviews || 0,
     };
 
-    const avgRating = items.length ? (items.reduce((a: number, b: any) => a + Number(b.rating || 0), 0) / items.length).toFixed(1) : "0.0";
-    const totalReviews = items.reduce((a: number, b: any) => a + ((activeTab === 'place' ? b.place_reviews?.length : b.event_reviews?.length) || 0), 0);
+    const avgRating = meta.avgRating;
+    const totalReviews = meta.totalReviews;
     const activeFilterCount = (filters.region?.length || 0) + (filters.provinceIds?.length || 0) + (filters.categoryId ? 1 : 0) + (filters.bestSeason?.length || 0) + (filters.minRating ? 1 : 0);
 
     const sortLabel = SORT_OPTIONS.find(s => s.id === sortBy)?.label || "Recommended";
@@ -235,7 +237,6 @@ export default function ExplorePage() {
                         {[
                             { label: "Places Found", value: meta.total, icon: <MapPin className="w-4 h-4" /> },
                             { label: "Avg Rating", value: avgRating, icon: <Star className="w-4 h-4" /> },
-                            { label: "Total Reviews", value: totalReviews, icon: <Eye className="w-4 h-4" /> },
                         ].map((stat, i) => (
                             <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2 + i * 0.08 }}

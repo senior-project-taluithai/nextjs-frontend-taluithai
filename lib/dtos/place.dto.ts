@@ -13,6 +13,7 @@ export interface Place {
   image_urls: string[];
   categories: string[];
   place_reviews?: any[];
+  review_count: number;
 }
 
 export interface ExplorePlacesQuery {
@@ -24,4 +25,6 @@ export interface ExplorePlacesQuery {
   minRating?: number;
   page?: number;
   limit?: number;
+  orderField?: string;
+  orderDir?: 'ASC' | 'DESC';
 }
