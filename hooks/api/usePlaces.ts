@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { placeService } from "@/lib/services/place";
 
 export const usePlaces = () => {
@@ -30,6 +30,13 @@ export const usePopularPlaces = () => {
   });
 };
 
+export const useHiddenGems = () => {
+  return useQuery({
+    queryKey: ["places", "hidden-gems"],
+    queryFn: () => placeService.getHiddenGems(),
+  });
+};
+
 export const useBestForSeasonPlaces = () => {
   return useQuery({
     queryKey: ["places", "best-for-season"],
@@ -41,6 +48,16 @@ export const useExplorePlaces = (query: import("@/lib/dtos/place.dto").ExplorePl
   return useQuery({
     queryKey: ["places", "explore", query],
     queryFn: () => placeService.explore(query),
+  });
+};
+
+export const useAddPlaceReview = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, comment, rating }: { id: number; comment: string; rating: number }) => placeService.addReview(id, comment, rating),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["places", Number(variables.id)] });
+    },
   });
 };
 

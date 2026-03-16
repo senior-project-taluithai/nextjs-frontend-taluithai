@@ -126,3 +126,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Scrollbar hiding utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dark sidebar overrides — force dark colors in the sidebar */
+[data-sidebar="sidebar"] {
+  --sidebar: #0f1923;
+  --sidebar-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #ffffff;
+}
+

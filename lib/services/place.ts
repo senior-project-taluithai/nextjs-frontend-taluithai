@@ -12,6 +12,11 @@ export const placeService = {
     return response.data;
   },
 
+  getHiddenGems: async (): Promise<Place[]> => {
+    const response = await api.get<Place[]>('/places/hidden-gems');
+    return response.data;
+  },
+
   getBestForSeason: async (): Promise<Place[]> => {
     const response = await api.get<Place[]>('/places/best-for-season');
     return response.data;
@@ -35,5 +40,10 @@ export const placeService = {
   getTiktokVideos: async (id: number): Promise<string[]> => {
     const response = await api.get<{ videos: string[] }>(`/places/${id}/tiktok-videos`);
     return response.data.videos;
+  },
+
+  addReview: async (id: number, comment: string, rating: number): Promise<any> => {
+    const response = await api.post(`/places/${id}/reviews`, { comment, rating });
+    return response.data;
   },
 };

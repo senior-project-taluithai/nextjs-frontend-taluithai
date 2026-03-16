@@ -3,6 +3,8 @@ export interface PaginatedResponse<T> {
   page: number;
   last_page: number;
   total: number;
+  avgRating?: number;
+  totalReviews?: number;
 }
 
 export type PaginatedResult<T> = PaginatedResponse<T>;

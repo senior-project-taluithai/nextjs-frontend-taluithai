@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AuthProvider } from "@/components/providers/AuthProvider"
+import { RouteGuard } from "@/components/providers/RouteGuard"
 import { Toaster } from "@/components/ui/sonner"
 import QueryProvider from "@/components/providers/QueryProvider";
 
@@ -31,25 +32,24 @@ export default function RootLayout({
   return (
     <QueryProvider>
       <AuthProvider>
-        <html lang="en" suppressHydrationWarning>
-          <body
-            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            suppressHydrationWarning
-          >
-            <SidebarProvider>
-              <AppSidebar />
-              <main className="w-full relative overflow-x-hidden">
-                <div className="md:hidden p-4">
-                  <SidebarTrigger />
-                </div>
-                {/* For magin all main content */}
-                {/* <div className="container mx-auto p-6 pt-0 md:pt-6"> */}
-                {children}
-              </main>
-              <Toaster position="top-right" />
-            </SidebarProvider>
-          </body>
-        </html>
+        <RouteGuard>
+          <html lang="en" suppressHydrationWarning>
+            <body
+              className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+              suppressHydrationWarning
+            >
+              <SidebarProvider>
+                <AppSidebar />
+                <main className="w-full relative overflow-x-hidden">
+                  {/* For magin all main content */}
+                  {/* <div className="container mx-auto p-6 pt-0 md:pt-6"> */}
+                  {children}
+                </main>
+                <Toaster position="top-right" />
+              </SidebarProvider>
+            </body>
+          </html>
+        </RouteGuard>
       </AuthProvider>
     </QueryProvider>
   );
