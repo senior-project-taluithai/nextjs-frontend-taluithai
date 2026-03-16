@@ -5,8 +5,16 @@ import { useRouter } from "next/navigation";
 import { Star, MapPin, Heart, ArrowRight, Calendar } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Place } from "@/lib/dtos/place.dto";
+import { interactionService } from "@/lib/services/interaction";
 import { Event } from "@/lib/dtos/event.dto";
 import { useProvinces } from "@/hooks/api/useProvinces";
+import { useAuth } from "@/components/providers/AuthProvider";
+import {
+    useToggleFavoritePlace,
+    useIsFavoritePlace,
+    useToggleFavoriteEvent,
+    useIsFavoriteEvent
+} from "@/hooks/api/useFavorites";
 
 // Helpers & Constants from design
 const SEASON_OPTIONS = [
@@ -79,10 +87,18 @@ export interface ExploreCardProps {
 
 export function ExploreCard({ item, type, index = 0 }: ExploreCardProps) {
     const router = useRouter();
+    const { user } = useAuth();
+    const isPlace = type === 'place';
+
+    const { data: isSavedPlace = false } = useIsFavoritePlace(isPlace ? item.id : 0);
+    const { data: isSavedEvent = false } = useIsFavoriteEvent(!isPlace ? item.id : 0);
+
+    const { mutate: toggleFavoritePlace } = useToggleFavoritePlace();
+    const { mutate: toggleFavoriteEvent } = useToggleFavoriteEvent();
+
+    const saved = isPlace ? isSavedPlace : isSavedEvent;
     const { data: provinces = [] } = useProvinces();
     const province = provinces.find((p) => p.id === item.province_id);
-
-    const [saved, setSaved] = useState(false);
     const [hovered, setHovered] = useState(false);
 
     // Map data
@@ -166,7 +182,18 @@ export function ExploreCard({ item, type, index = 0 }: ExploreCardProps) {
 
                         {/* Save button */}
                         <motion.button whileTap={{ scale: 0.85 }}
-                            onClick={e => { e.stopPropagation(); setSaved(!saved); }}
+                            onClick={e => {
+                                e.stopPropagation();
+                                if (!user) {
+                                    router.push(`/auth/login?redirect=/explore`);
+                                    return;
+                                }
+                                if (isPlace) {
+                                    toggleFavoritePlace(item.id);
+                                } else {
+                                    toggleFavoriteEvent(item.id);
+                                }
+                            }}
                             className={`absolute bottom-4 right-4 w-9 h-9 rounded-full backdrop-blur-xl flex items-center justify-center border transition-all z-20 ${saved ? "bg-red-500 border-red-400/30 text-white shadow-lg shadow-red-500/30" : "bg-white/10 border-white/20 text-white hover:bg-white/25"}`}>
                             <Heart className={`w-4 h-4 transition-all ${saved ? "fill-white" : ""}`} />
                         </motion.button>

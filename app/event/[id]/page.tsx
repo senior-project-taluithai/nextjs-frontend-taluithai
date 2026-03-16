@@ -13,6 +13,7 @@ import { useProvinces } from "@/hooks/api/useProvinces";
 import { useToggleFavoriteEvent, useIsFavoriteEvent } from "@/hooks/api/useFavorites";
 import { interactionService } from "@/lib/services/interaction";
 import dynamic from "next/dynamic";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 const Map = dynamic(() => import("@/components/map/LeafletMap"), {
     ssr: false,
@@ -168,6 +169,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
     const eventId = Number(id);
     const router = useRouter();
+    const { user } = useAuth();
 
     const { data: event, isLoading: isLoadingEvent, isError, refetch } = useEvent(eventId);
     const { data: provinces = [] } = useProvinces();
@@ -227,6 +229,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
     const handleSubmitReview = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!user) {
+            router.push(`/auth/login?redirect=/event/${eventId}`);
+            return;
+        }
         if (!comment.trim() || userRating === 0) return;
 
         addReviewMutation.mutate({
@@ -303,7 +309,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex gap-2.5">
                         <motion.button
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => toggleFavorite(event.id)}
+                            onClick={() => {
+                                if (!user) {
+                                    router.push(`/auth/login?redirect=/event/${eventId}`);
+                                    return;
+                                }
+                                toggleFavorite(event.id);
+                            }}
                             className={`w-11 h-11 rounded-2xl backdrop-blur-xl flex items-center justify-center transition-all border shadow-lg shadow-black/10 ${isSaved
                                 ? "bg-red-500/90 text-white border-red-400/30"
                                 : "bg-white/10 text-white border-white/10 hover:bg-white/20"
@@ -395,7 +407,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => toggleFavorite(event.id)}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => {
+                                if (!user) {
+                                    router.push(`/auth/login?redirect=/event/${eventId}`);
+                                    return;
+                                }
+                                toggleFavorite(event.id);
+                            }}
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isSaved ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                                 <Heart className={`w-4 h-4 ${isSaved ? "fill-red-400" : ""}`} />
                             </motion.button>
@@ -740,7 +758,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={() => toggleFavorite(event.id)}
+                                    onClick={() => {
+                                        if (!user) {
+                                            router.push(`/auth/login?redirect=/event/${eventId}`);
+                                            return;
+                                        }
+                                        toggleFavorite(event.id);
+                                    }}
                                     className={`w-full py-3.5 rounded-2xl text-sm transition-all duration-300 flex items-center justify-center gap-2.5 ${isSaved
                                         ? "bg-red-50 text-red-500 border-2 border-red-200 hover:bg-red-100 shadow-md shadow-red-100"
                                         : "bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-600 hover:to-rose-600 shadow-lg shadow-pink-200/50"

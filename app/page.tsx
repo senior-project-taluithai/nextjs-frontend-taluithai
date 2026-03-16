@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   Zap,
 } from "lucide-react";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import {
@@ -94,6 +95,7 @@ function use3DTilt(intensity = 10) {
    PLACE CARD (3-D tilt + holographic glare)
 ═══════════════════════════════════════════════════ */
 function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; provinces: Province[]; size?: "default" | "large" | "small" }) {
+  const { user } = useAuth();
   const { data: isSaved = false } = useIsFavoritePlace(place.id);
   const { mutate: toggleFavorite } = useToggleFavoritePlace();
   const [hovered, setHovered] = useState(false);
@@ -140,7 +142,14 @@ function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; pro
           <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
           <span className="text-xs font-semibold text-gray-800">{place.rating}</span>
         </motion.div>
-        <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
+        <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => {
+          e.stopPropagation();
+          if (!user) {
+            router.push("/auth/login?redirect=/");
+            return;
+          }
+          toggleFavorite(place.id);
+        }}
           className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/40 transition-colors">
           <Heart className={`w-4 h-4 transition-all ${isSaved ? "text-red-400 fill-red-400 scale-110" : "text-white"}`} />
         </motion.button>
@@ -177,6 +186,7 @@ function PlaceCard3D({ place, provinces, size = "default" }: { place: Place; pro
 ═══════════════════════════════════════════════════ */
 function HeroCard({ place, provinces, index }: { place: Place; provinces: Province[]; index: number }) {
   const router = useRouter();
+  const { user } = useAuth();
   const { data: isSaved = false } = useIsFavoritePlace(place.id);
   const { mutate: toggleFavorite } = useToggleFavoritePlace();
   const [hovered, setHovered] = useState(false);
@@ -214,7 +224,14 @@ function HeroCard({ place, provinces, index }: { place: Place; provinces: Provin
           </span>
 
         </div>
-        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
+        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => {
+          e.stopPropagation();
+          if (!user) {
+            router.push("/auth/login?redirect=/");
+            return;
+          }
+          toggleFavorite(place.id);
+        }}
           className="absolute top-14 right-4 w-9 h-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-white/25 transition-colors">
           <Heart className={`w-4 h-4 transition-all ${isSaved ? "fill-red-400 text-red-400" : "text-white"}`} />
         </motion.button>
@@ -440,6 +457,7 @@ function HiddenGemCard({ place, provinces, delay }: { place: Place; provinces: P
 ═══════════════════════════════════════════════════ */
 function FestivalPosterCard({ event, provinces, delay }: { event: Event; provinces: Province[]; delay: number }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [hovered, setHovered] = useState(false);
   const { ref, rotateX, rotateY, glarePos, onMove, onLeave } = use3DTilt(7);
   const { data: isSaved = false } = useIsFavoriteEvent(event.id);
@@ -489,7 +507,14 @@ function FestivalPosterCard({ event, provinces, delay }: { event: Event; provinc
           </div>
 
           <div className="absolute top-4 right-4 flex gap-2" style={{ transform: "translateZ(20px)" }}>
-            <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => { e.stopPropagation(); toggleFavorite(event.id); }}
+            <motion.button whileTap={{ scale: 0.85 }} onClick={(e) => {
+              e.stopPropagation();
+              if (!user) {
+                router.push("/auth/login?redirect=/");
+                return;
+              }
+              toggleFavorite(event.id);
+            }}
               className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg hover:bg-black/50 transition-colors">
               <Heart className={`w-4 h-4 transition-all ${isSaved ? "text-red-500 fill-red-500 scale-110" : "text-white"}`} />
             </motion.button>

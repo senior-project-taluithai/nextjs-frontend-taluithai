@@ -18,6 +18,7 @@ import { useProvinces } from "@/hooks/api/useProvinces";
 import { useToggleFavoritePlace, useIsFavoritePlace } from "@/hooks/api/useFavorites";
 import { interactionService } from "@/lib/services/interaction";
 import { TikTokEmbed } from "react-social-media-embed";
+import { useAuth } from "@/components/providers/AuthProvider";
 import dynamic from "next/dynamic";
 
 const Map = dynamic(() => import("@/components/map/LeafletMap"), {
@@ -184,6 +185,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
     const placeId = Number(id);
     const router = useRouter();
+    const { user } = useAuth();
 
     const { data: place, isLoading: isLoadingPlace, isError, refetch } = usePlace(placeId);
     const { data: provinces = [] } = useProvinces();
@@ -238,6 +240,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
 
     const handleSubmitReview = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!user) {
+            router.push(`/auth/login?redirect=/place/${placeId}`);
+            return;
+        }
         if (!comment.trim() || userRating === 0) return;
 
         addReviewMutation.mutate({
@@ -314,7 +320,13 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex gap-2.5">
                         <motion.button
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => toggleFavorite(place.id)}
+                            onClick={() => {
+                                if (!user) {
+                                    router.push(`/auth/login?redirect=/place/${placeId}`);
+                                    return;
+                                }
+                                toggleFavorite(place.id);
+                            }}
                             className={`w-11 h-11 rounded-2xl backdrop-blur-xl flex items-center justify-center transition-all border shadow-lg shadow-black/10 ${isSaved
                                 ? "bg-red-500/90 text-white border-red-400/30"
                                 : "bg-white/10 text-white border-white/10 hover:bg-white/20"
@@ -392,7 +404,13 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => toggleFavorite(place.id)}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => {
+                                if (!user) {
+                                    router.push(`/auth/login?redirect=/place/${placeId}`);
+                                    return;
+                                }
+                                toggleFavorite(place.id);
+                            }}
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isSaved ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                                 <Heart className={`w-4 h-4 ${isSaved ? "fill-red-400" : ""}`} />
                             </motion.button>
