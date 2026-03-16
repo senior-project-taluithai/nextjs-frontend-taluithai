@@ -30,27 +30,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <QueryProvider>
-      <AuthProvider>
-        <RouteGuard>
-          <html lang="en" suppressHydrationWarning>
-            <body
-              className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-              suppressHydrationWarning
-            >
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <QueryProvider>
+          <AuthProvider>
+            <RouteGuard>
               <SidebarProvider>
                 <AppSidebar />
                 <main className="w-full relative overflow-x-hidden">
-                  {/* For magin all main content */}
-                  {/* <div className="container mx-auto p-6 pt-0 md:pt-6"> */}
                   {children}
                 </main>
                 <Toaster position="top-right" />
               </SidebarProvider>
-            </body>
-          </html>
-        </RouteGuard>
-      </AuthProvider>
-    </QueryProvider>
+            </RouteGuard>
+          </AuthProvider>
+        </QueryProvider>
+      </body>
+    </html>
   );
 }
+
