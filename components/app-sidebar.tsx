@@ -235,6 +235,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       collapsible="icon"
       {...props}
       className="!bg-[#0f1923] !border-r-0 overflow-hidden"
+      style={{ "--sidebar": "#0f1923" } as React.CSSProperties}
     >
       {/* 3-D floating orbs background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -263,8 +264,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <Link
                   href="/ai-planner"
                   className={`flex items-center gap-3 rounded-xl px-3 py-3 transition-all duration-200 overflow-hidden relative ${isAIPlannerActive
-                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                      : "bg-white/10 hover:bg-white/15 text-white"
+                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                    : "bg-white/10 hover:bg-white/15 text-white"
                     }`}
                 >
                   {/* animated gradient shimmer when active */}
