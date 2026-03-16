@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
-import { MapPin } from "lucide-react";
+import { MapPin, Bot, Sparkles } from "lucide-react";
 
 import { useAgentChat, type PlannedTrip, type ToolCall } from "@/hooks/useAgentChat";
 import { TripDayCards } from "@/components/ai-planner/trip-day-cards";
@@ -248,9 +248,9 @@ export default function AIPlannerPage() {
         }
     }, [tripData]);
 
-    const handleSubmit = (message: PromptInputMessage) => {
-        if (!message.text.trim()) return;
-        sendMessage(message.text);
+    const handleSubmit = () => {
+        if (!text.trim()) return;
+        sendMessage(text);
         setText("");
     };
 
@@ -333,12 +333,9 @@ export default function AIPlannerPage() {
     const chatStatus = isStreaming ? "streaming" : "ready";
 
     return (
-        <div className="relative w-full h-screen overflow-hidden flex">
-            {/* Background Map */}
-            <BackgroundMap items={mapItems} />
-
+        <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
             {/* Trip Result Panel (left) */}
-            <div className="relative z-10 h-full shrink-0">
+            <div className="relative z-10 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 shadow-sm w-[320px]">
                 <TripResultPanel
                     tripName={trip.name}
                     days={trip.days}
@@ -348,128 +345,180 @@ export default function AIPlannerPage() {
                 />
             </div>
 
-            {/* Spacer — lets map show between panels */}
-            <div className="flex-1 min-w-0" />
+            {/* Center Area (Map) */}
+            <div className="flex-1 relative overflow-hidden bg-muted/10">
+                <div className="absolute inset-0">
+                    <BackgroundMap items={mapItems} />
+                </div>
+            </div>
 
             {/* Chat Panel (right) */}
-            <div className="relative z-10 shrink-0 flex h-full w-[400px] flex-col border-l bg-background/95 backdrop-blur-sm shadow-lg">
-                {/* Header */}
-                <div className="flex items-center gap-2 border-b px-4 py-3">
-                    <MapPin className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-semibold">TaluiThai AI</h2>
+            <div className="w-[400px] flex flex-col bg-white border-l border-gray-100 shadow-sm shrink-0 relative overflow-hidden z-10">
+                {/* Chat Header */}
+                <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-md shrink-0">
+                            <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-gray-900 text-sm">TaluiThai AI</h3>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="text-xs text-emerald-600 font-medium">Plan Trip</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Conversation */}
-                <Conversation className="min-h-0 flex-1">
-                    <ConversationContent>
-                        {messages.length === 0 ? (
-                            <ConversationEmptyState
-                                title="TaluiThai AI"
-                                description="Tell me where you want to go, how many days, and your budget — I'll help plan your trip!"
-                                icon={<MapPin className="h-8 w-8" />}
-                            />
-                        ) : (
-                            messages.map((msg) => (
-                                <Message key={msg.id} from={msg.role}>
-                                    <MessageContent>
-                                        {msg.role === "assistant" ? (() => {
-                                            const isCurrentlyStreaming = isStreaming && msg === messages[messages.length - 1];
-                                            const cleanText = msg.content ? stripJsonBlocks(msg.content) : "";
-                                            return (
-                                                <>
-                                                    {/* Tool calls — always show progress */}
-                                                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                    {messages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
+                                <Bot className="w-6 h-6 text-emerald-500" />
+                            </div>
+                            <p className="text-sm font-semibold text-gray-900 mb-1">Welcome to TaluiThai AI</p>
+                            <p className="text-xs text-gray-500">Tell me where you want to go and how many days — I'll help plan your trip!</p>
+                        </div>
+                    ) : (
+                        messages.map((msg) => (
+                            <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}>
+                                {msg.role === "user" ? (
+                                    <>
+                                        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
+                                            <svg className="w-3.5 h-3.5 text-white" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                                        </div>
+                                        <div className="max-w-[85%] relative">
+                                            <div className="rounded-2xl rounded-br-sm px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50" style={{ background: "linear-gradient(135deg, #059669 0%, #0d9488 100%)" }}>
+                                                <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
+                                            <Bot className="w-3.5 h-3.5 text-white" />
+                                        </div>
+                                        <div className="flex-1 max-w-[calc(100%-2rem)]">
+                                            <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+                                                {(() => {
+                                                    const isCurrentlyStreaming = isStreaming && msg === messages[messages.length - 1];
+                                                    const cleanText = msg.content ? stripJsonBlocks(msg.content) : "";
+                                                    return (
                                                         <div className="space-y-2">
-                                                            {msg.toolCalls.map((tc: ToolCall) => (
-                                                                <ToolCallDisplay key={tc.id} toolCall={tc} />
-                                                            ))}
+                                                            {/* Tool calls */}
+                                                            {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                                                <div className="space-y-2">
+                                                                    {msg.toolCalls.map((tc: ToolCall) => (
+                                                                        <ToolCallDisplay key={tc.id} toolCall={tc} />
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            {isCurrentlyStreaming ? (
+                                                                !cleanText && !msg.toolCalls?.length ? (
+                                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                                        <Loader size={14} />
+                                                                        <span className="text-xs">Thinking...</span>
+                                                                    </div>
+                                                                ) : msg.toolCalls?.length ? (
+                                                                    <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                                                                        <Loader size={14} />
+                                                                        <span className="text-xs">Processing...</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                                        <Loader size={14} />
+                                                                        <span className="text-xs">Writing response...</span>
+                                                                    </div>
+                                                                )
+                                                            ) : (
+                                                                /* Done streaming */
+                                                                (() => {
+                                                                    const sanitized = cleanText ? sanitizeMarkdownTables(cleanText) : "";
+                                                                    const isLatest = msg === messages[messages.length - 1];
+                                                                    return (
+                                                                        <>
+                                                                            {sanitized ? (
+                                                                                isLatest ? (
+                                                                                    <div className="whitespace-pre-wrap"><TypewriterMessage text={sanitized} /></div>
+                                                                                ) : (
+                                                                                    <div className="whitespace-pre-wrap"><MessageResponse>{sanitized}</MessageResponse></div>
+                                                                                )
+                                                                            ) : null}
+                                                                            {trip.days.length > 0 && isLatest && (
+                                                                                <TripDayCards days={trip.days} />
+                                                                            )}
+                                                                        </>
+                                                                    );
+                                                                })()
+                                                            )}
                                                         </div>
-                                                    )}
-
-                                                    {isCurrentlyStreaming ? (
-                                                        /* While streaming: show thinking indicator, hide raw text */
-                                                        !cleanText && !msg.toolCalls?.length ? (
-                                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                                <Loader size={16} />
-                                                                <span className="text-sm">Thinking...</span>
-                                                            </div>
-                                                        ) : msg.toolCalls?.length ? (
-                                                            <div className="flex items-center gap-2 text-muted-foreground mt-2">
-                                                                <Loader size={16} />
-                                                                <span className="text-sm">Summarizing...</span>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                                <Loader size={16} />
-                                                                <span className="text-sm">Writing response...</span>
-                                                            </div>
-                                                        )
-                                                    ) : (
-                                                        /* Stream complete: render formatted response */
-                                                        (() => {
-                                                            const sanitized = cleanText ? sanitizeMarkdownTables(cleanText) : "";
-                                                            const isLatest = msg === messages[messages.length - 1];
-                                                            return (
-                                                                <>
-                                                                    {sanitized ? (
-                                                                        isLatest ? (
-                                                                            <TypewriterMessage text={sanitized} />
-                                                                        ) : (
-                                                                            <MessageResponse>{sanitized}</MessageResponse>
-                                                                        )
-                                                                    ) : null}
-                                                                    {/* Day cards with horizontal scroll */}
-                                                                    {trip.days.length > 0 && isLatest && (
-                                                                        <TripDayCards days={trip.days} />
-                                                                    )}
-                                                                </>
-                                                            );
-                                                        })()
-                                                    )}
-                                                </>
-                                            );
-                                        })() : (
-                                            <p>{msg.content}</p>
-                                        )}
-                                    </MessageContent>
-                                </Message>
-                            ))
-                        )}
-                    </ConversationContent>
-                    <ConversationScrollButton />
-                </Conversation>
-
-                {/* Suggestions + Input */}
-                <div className="shrink-0 space-y-3 border-t p-3">
-                    {messages.length === 0 && (
-                        <Suggestions>
-                            {SUGGESTIONS.map((s) => (
-                                <Suggestion
-                                    key={s}
-                                    suggestion={s}
-                                    onClick={handleSuggestionClick}
-                                />
-                            ))}
-                        </Suggestions>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ))
                     )}
+                    {/* Add spacer at bottom for scrolling */}
+                    <div className="h-4" />
+                </div>
 
-                    <PromptInput onSubmit={handleSubmit}>
-                        <PromptInputBody>
-                            <PromptInputTextarea
-                                placeholder="Type a message..."
-                                value={text}
-                                onChange={(e) => setText(e.target.value)}
-                            />
-                        </PromptInputBody>
-                        <PromptInputFooter>
-                            <div />
-                            <PromptInputSubmit
-                                disabled={!text.trim() && !isStreaming}
-                                status={chatStatus}
-                                onClick={isStreaming ? stop : undefined}
-                            />
-                        </PromptInputFooter>
-                    </PromptInput>
+                {/* Quick Prompts (only shown initially) */}
+                {messages.length === 0 && (
+                    <div className="px-4 pb-3">
+                        <p className="text-xs text-gray-400 mb-2">Quick start:</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {[
+                                { text: "3 days Krabi", prompt: "Plan a 3-day trip to Krabi for beach lovers" },
+                                { text: "Temple Tour", prompt: "Plan a 2-day cultural temple tour in Chiang Mai" },
+                                { text: "Nature Hiking", prompt: "Plan a nature and hiking trip in Northern Thailand" },
+                                { text: "Family Trip", prompt: "Plan a 4-day family trip to Phuket" },
+                            ].map((qp) => (
+                                <button key={qp.text} onClick={() => sendMessage(qp.prompt)} className="flex items-center justify-center px-2 py-2 bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 border border-gray-100 hover:border-emerald-200 rounded-xl text-[11px] text-gray-600 transition-all text-center">
+                                    {qp.text}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Input Area */}
+                <div className="px-4 py-3 border-t border-gray-100 bg-white">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20 transition-all">
+                        <input
+                            type="text"
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmit();
+                                }
+                            }}
+                            placeholder="Plan a trip..."
+                            className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
+                        />
+                        {isStreaming ? (
+                            <button
+                                onClick={stop}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 transition-all shrink-0"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2" ry="2" /></svg>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => handleSubmit()}
+                                disabled={!text.trim()}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0 ${text.trim() ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-200" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
