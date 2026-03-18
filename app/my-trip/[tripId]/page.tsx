@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, MapPin, Calendar, Clock, MoreVertical, Trash2, CheckCircle2, Map as MapIcon, List, Sparkles, Navigation, Search, X, ChevronLeft, ChevronRight, Loader2, GripVertical, ChevronUp, ChevronDown, Edit2, Heart, SlidersHorizontal, Check, AlertCircle, Star } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, Calendar, Clock, MoreVertical, Trash2, CheckCircle2, Map as MapIcon, List, Sparkles, Navigation, Search, X, ChevronLeft, ChevronRight, Loader2, GripVertical, ChevronUp, ChevronDown, Edit2, Heart, SlidersHorizontal, Check, AlertCircle, Star, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import dynamic from "next/dynamic";
@@ -20,7 +20,8 @@ import {
     useAddTripDayItem,
     useRemoveTripDayItem,
     useUpdateTripDayItem,
-    useReorderTripDayItems
+    useReorderTripDayItems,
+    useUpdateTrip
 } from "@/hooks/api/useTrips";
 import {
     DndContext,
@@ -49,6 +50,8 @@ const TripMap = dynamic(() => import("@/components/my-trip/trip-map"), {
 
 import { EditTripDialog } from "@/components/my-trip/edit-trip-dialog";
 import { RecommendationSection } from "@/components/my-trip/recommendation-section";
+import { BudgetPanel } from "@/components/ai-planner/budget-panel";
+import { EditBudgetDialog } from "@/components/my-trip/edit-budget-dialog";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -77,6 +80,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     const [orderedItems, setOrderedItems] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>("places");
     const [isEditTripOpen, setIsEditTripOpen] = useState(false);
+    const [isEditBudgetOpen, setIsEditBudgetOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Filter States for "All Places"
@@ -137,6 +141,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     const updateItemMutation = useUpdateTripDayItem();
     const reorderItemMutation = useReorderTripDayItems();
     const deleteTripMutation = useDeleteTrip();
+    const updateTripMutation = useUpdateTrip();
 
     const sortedDays = useMemo(() => {
         if (!trip?.TripDays) return [];
@@ -381,6 +386,12 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                 trip={trip}
             />
 
+            <EditBudgetDialog
+                open={isEditBudgetOpen}
+                onOpenChange={setIsEditBudgetOpen}
+                trip={trip}
+            />
+
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -485,7 +496,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     {/* Right panel tab bar */}
                     <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 shrink-0">
                         <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-                            {(["places", "events", "saved"] as const).map((tab) => (
+                            {(["places", "events", "saved", "budget"] as const).map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => { setActiveTab(tab); setShowMap(false); }}
@@ -497,6 +508,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                     {tab === "places" && <MapPin className="w-3.5 h-3.5" />}
                                     {tab === "events" && <Calendar className="w-3.5 h-3.5" />}
                                     {tab === "saved" && <Heart className="w-3.5 h-3.5" />}
+                                    {tab === "budget" && <Wallet className="w-3.5 h-3.5" />}
                                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                                 </button>
                             ))}
@@ -963,6 +975,36 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                         </div>
                                     )}
 
+                                    {/* --- BUDGET TAB --- */}
+                                    {activeTab === 'budget' && (
+                                        <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
+                                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
+                                                <div>
+                                                    <h3 className="font-bold text-gray-900 text-[1.05rem]">Trip Budget</h3>
+                                                    <p className="text-xs text-gray-400">Manage your estimated expenses</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setIsEditBudgetOpen(true)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    Edit Budget
+                                                </button>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                <BudgetPanel 
+                                                    data={trip.budget || { total: 0, categories: [] }} 
+                                                    daysCount={trip.TripDays?.length || 1} 
+                                                    onUpdateBudget={(newData) => {
+                                                        updateTripMutation.mutate({ 
+                                                            id: parseInt(tripId), 
+                                                            data: { budget: newData } 
+                                                        });
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                 </motion.div>
                             )}

@@ -214,13 +214,24 @@ function extractMessages(
   state: Record<string, unknown> | null
 ): { role: string; content: string }[] {
   if (!state || !Array.isArray(state.messages)) return [];
+  
   return state.messages
-    .filter(
-      (m: Record<string, unknown>) =>
-        (m.type === "human" || m.type === "ai") && typeof m.content === "string"
-    )
-    .map((m: Record<string, unknown>) => ({
-      role: m.type === "human" ? "user" : "assistant",
-      content: m.content as string,
-    }));
+    .map((m: any) => {
+      // Handle standard basic objects
+      if (m.type === "human") return { role: "user", content: typeof m.content === "string" ? m.content : "" };
+      if (m.type === "ai") return { role: "assistant", content: typeof m.content === "string" ? m.content : "" };
+      
+      // Handle serialized LangChain messages
+      if (m.type === "constructor" && m.id && Array.isArray(m.id)) {
+        const typeStr = m.id.join(".");
+        if (typeStr.includes("HumanMessage")) {
+           return { role: "user", content: m.kwargs?.content || "" };
+        }
+        if (typeStr.includes("AIMessage")) {
+           return { role: "assistant", content: m.kwargs?.content || "" };
+        }
+      }
+      return null;
+    })
+    .filter((m): m is {role: string; content: string} => m !== null && m.content !== "");
 }

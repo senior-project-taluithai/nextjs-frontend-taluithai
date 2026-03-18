@@ -3,7 +3,8 @@ export interface CreateTripRequest {
   start_date: string;
   end_date: string;
   province_ids: number[];
-  status?: 'draft' | 'upcoming' | 'completed';
+  status?: "draft" | "planned" | "upcoming" | "completed" | "pass";
+  budget?: any;
 }
 
 export interface UpdateTripRequest {
@@ -11,12 +12,13 @@ export interface UpdateTripRequest {
   start_date?: string;
   end_date?: string;
   province_ids?: number[];
-  status?: 'draft' | 'upcoming' | 'completed';
+  status?: "draft" | "planned" | "upcoming" | "completed" | "pass";
+  budget?: any;
 }
 
 export interface TripDayItem {
   id: number;
-  item_type?: 'place' | 'event';
+  item_type?: "place" | "event";
   place_id?: number;
   event_id?: number;
   note?: string;
@@ -26,7 +28,7 @@ export interface TripDayItem {
 }
 
 export interface CreateTripDayItemRequest {
-  item_type: 'place' | 'event';
+  item_type: "place" | "event";
   item_id: number;
   note?: string;
   order?: number;

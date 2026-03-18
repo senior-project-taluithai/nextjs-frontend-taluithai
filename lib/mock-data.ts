@@ -86,6 +86,7 @@ export interface TripDto {
   end_date: string; // ISO date
   status: 'draft' | 'upcoming' | 'completed';
   provinces: ProvinceDto[]; // Updated to include provinces array
+  budget?: any;
 }
 
 export interface TripDetailDto extends TripDto {
