@@ -7,20 +7,10 @@ import L from "leaflet";
 import { Star } from "lucide-react";
 import Image from "next/image";
 
-const ALLOWED_IMAGE_HOSTNAMES = new Set([
-    "lh3.googleusercontent.com",
-    "streetviewpixels-pa.googleapis.com",
-    "tatapi.tourismthailand.org",
-    "www.tourismthailand.org",
-    "images.unsplash.com",
-    "picsum.photos",
-    "fastly.picsum.photos",
-]);
-
 function isAllowedImageUrl(url: string): boolean {
     try {
         const u = new URL(url);
-        return u.protocol === "https:" && ALLOWED_IMAGE_HOSTNAMES.has(u.hostname);
+        return u.protocol === "https:" || u.protocol === "http:";
     } catch {
         return false;
     }

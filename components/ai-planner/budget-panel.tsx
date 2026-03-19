@@ -227,7 +227,7 @@ export function BudgetPanel({
   }, [allExpenses, data.dailyBudgets, totalBudget, daysCount]);
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div>
       <div className="px-5 py-5 space-y-5">
         {/* ── Budget Overview Card ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

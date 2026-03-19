@@ -516,8 +516,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                 {/* ── RIGHT: Discover or Map ── */}
                 <div className={`
-                    flex-1 flex flex-col overflow-hidden
-                    ${activeMobilePanel === "discover" ? "block" : "hidden sm:block"}
+                    flex-1 flex flex-col
+                    ${activeMobilePanel === "discover" ? "flex" : "hidden sm:flex"}
                 `}>
                     {/* Mobile header */}
                     <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0 bg-white">
@@ -561,7 +561,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     </div>
 
                     {/* Content Areas */}
-                    <div className="flex-1 overflow-hidden relative">
+                    <div className="flex-1 relative overflow-hidden">
                         {/* Map View */}
                         <AnimatePresence>
                             {showMap && (
@@ -602,11 +602,11 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
-                                    className="h-full overflow-y-auto bg-[#f8f9fa]"
+                                    className="absolute inset-0 flex flex-col bg-[#f8f9fa]"
                                 >
                                     {/* --- PLACES TAB --- */}
                                     {activeTab === 'places' && (
-                                        <div className="px-3 sm:px-5 py-4 space-y-8">
+                                        <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-8">
                                             <RecommendationSection
                                                 title="Recommended for You"
                                                 icon={Sparkles}
@@ -767,7 +767,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                                     {/* --- EVENTS TAB --- */}
                                     {activeTab === 'events' && (
-                                        <div className="px-3 sm:px-5 py-4 sm:py-6 space-y-6">
+                                        <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 sm:py-6 space-y-6">
                                             {/* Search and Filter Bar for Events */}
                                             <div className="flex gap-2 sticky top-0 z-10 bg-[#f8f9fa]/90 backdrop-blur-md pt-1 pb-3 -mx-1 px-1">
                                                 <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-amber-100 focus-within:border-amber-300 transition-all">
@@ -911,7 +911,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                                     {/* --- SAVED TAB --- */}
                                     {activeTab === 'saved' && (
-                                        <div className="px-3 sm:px-5 py-4 sm:py-6 space-y-6">
+                                        <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 sm:py-6 space-y-6">
                                             <div className="flex items-center gap-2 pb-2">
                                                 <button
                                                     onClick={() => { setSavedType('place'); setSavedPage(1); }}
@@ -1014,8 +1014,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                                     {/* --- BUDGET TAB --- */}
                                     {activeTab === 'budget' && (
-                                        <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
-                                            <div className="flex items-center justify-between px-3 sm:px-5 py-4 border-b border-gray-100 bg-white">
+                                        <div className="flex-1 flex flex-col bg-[#f8f9fa] overflow-hidden">
+                                            <div className="flex items-center justify-between px-3 sm:px-5 py-4 border-b border-gray-100 bg-white shrink-0">
                                                 <div>
                                                     <h3 className="font-bold text-gray-900 text-[1.05rem]">Trip Budget</h3>
                                                     <p className="text-xs text-gray-400">Manage your estimated expenses</p>
