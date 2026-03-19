@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { BackgroundMap } from "@/components/ai-planner/background-map";
 import { TripResultPanel } from "@/components/ai-planner/trip-result-panel";
+import { ChatHistorySidebar } from "@/components/ai-planner/chat-history-sidebar";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
+import { useChatConversation, useChatMessages } from "@/hooks/api/useChat";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
-import { MapPin, Bot, Sparkles, Map, X } from "lucide-react";
+import { MapPin, Bot, Sparkles, Map, X, History } from "lucide-react";
 import { eventService } from "@/lib/services/event";
 
 import {
@@ -24,26 +26,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai/tool";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationScrollButton,
-} from "@/components/ai/conversation";
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai/message";
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputTextarea,
-  PromptInputFooter,
-  PromptInputSubmit,
-  type PromptInputMessage,
-} from "@/components/ai/prompt-input";
-import { Suggestions, Suggestion } from "@/components/ai/suggestion";
+import { MessageResponse } from "@/components/ai/message";
 import { Loader } from "@/components/ai/loader";
 
 /** Strip JSON code blocks from displayed message (trip data already extracted) */
@@ -207,13 +190,6 @@ function TypewriterMessage({ text }: { text: string }) {
   return <MessageResponse>{visibleText}</MessageResponse>;
 }
 
-const SUGGESTIONS = [
-  "Plan a 3-day Chiang Mai trip focusing on temples and nature",
-  "Recommend places in Phuket for families",
-  "2-day Krabi trip with a 5,000 THB budget",
-  "Explore Chiang Rai — cafes and scenic views",
-];
-
 // Map our ToolCall state to shadcn Tool component
 const TOOL_LABELS: Record<string, string> = {
   // Sub-agent tools (high-level)
@@ -257,8 +233,30 @@ export default function AIPlannerPage() {
   const addTripItemMutation = useAddTripDayItem();
   const { data: provinces } = useProvinces();
 
-  const { messages, isStreaming, tripData, budgetData, sendMessage, stop } =
-    useAgentChat();
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isNewChat, setIsNewChat] = useState(true);
+
+  const { data: activeConversation } = useChatConversation(
+    activeConversationId || "",
+  );
+  const { data: messagesData } = useChatMessages(activeConversationId, {
+    limit: 50,
+  });
+
+  const {
+    messages,
+    isStreaming,
+    tripData,
+    budgetData,
+    sendMessage,
+    stop,
+    updateThreadId,
+    loadConversation,
+    reset,
+  } = useAgentChat();
 
   const [trip, setTrip] = useState<PlannedTrip>({
     name: "",
@@ -267,7 +265,33 @@ export default function AIPlannerPage() {
   });
   const [isConfirming, setIsConfirming] = useState(false);
   const [text, setText] = useState("");
-  const [activeMobilePanel, setActiveMobilePanel] = useState<"trip" | "map" | "chat">("chat");
+  const [activeMobilePanel, setActiveMobilePanel] = useState<
+    "trip" | "map" | "chat"
+  >("chat");
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    if (messagesData?.data && messagesData.data.length > 0) {
+      const loadedMessages = messagesData.data.map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+      }));
+      loadConversation(loadedMessages, activeConversation?.threadId || null);
+      setIsNewChat(false);
+    } else if (!activeConversationId) {
+      setIsNewChat(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesData, activeConversationId, activeConversation?.threadId]);
+
+  // Sync threadId to conversation
+  useEffect(() => {
+    if (activeConversation?.threadId && !isNewChat) {
+      updateThreadId(activeConversation.threadId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversation?.threadId, isNewChat]);
 
   // Sync trip data from agent response
   useEffect(() => {
@@ -282,10 +306,6 @@ export default function AIPlannerPage() {
     if (!text.trim()) return;
     sendMessage(text);
     setText("");
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    sendMessage(suggestion);
   };
 
   const handleConfirmTrip = async () => {
@@ -433,18 +453,18 @@ export default function AIPlannerPage() {
     })),
   );
 
-  const chatStatus = isStreaming ? "streaming" : "ready";
-
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
       {/* Trip Result Panel (left) - hidden on mobile unless active */}
-      <div className={`
+      <div
+        className={`
         relative z-10 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 shadow-sm
         w-0 lg:w-[280px] xl:w-[320px]
         transition-all duration-300 overflow-hidden
         ${activeMobilePanel === "trip" ? "w-full lg:w-[280px] xl:w-[320px] !overflow-auto" : "w-0 lg:w-[280px] xl:w-[320px]"}
         hidden lg:flex
-      `}>
+      `}
+      >
         <TripResultPanel
           tripName={trip.name}
           days={trip.days}
@@ -488,11 +508,13 @@ export default function AIPlannerPage() {
       </div>
 
       {/* Chat Panel (right) - full width on mobile */}
-      <div className={`
+      <div
+        className={`
         flex flex-col bg-white border-l border-gray-100 shadow-sm relative overflow-hidden z-10
         w-full sm:w-[400px] md:w-[400px] lg:w-[360px] xl:w-[400px]
         ${activeMobilePanel === "chat" ? "flex" : "hidden sm:flex"}
-      `}>
+      `}
+      >
         {/* Chat Header */}
         <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -508,7 +530,32 @@ export default function AIPlannerPage() {
                 </span>
               </div>
             </div>
+            <button
+              onClick={() => setIsHistoryOpen(true)}
+              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+              title="Chat History"
+            >
+              <History className="w-4 h-4 text-gray-500" />
+            </button>
           </div>
+          {activeConversation && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-600 truncate">
+                  {activeConversation.title || "New Chat"}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveConversationId(null);
+                  reset();
+                }}
+                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+              >
+                New Chat
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Messages */}
@@ -522,8 +569,8 @@ export default function AIPlannerPage() {
                 Welcome to TaluiThai AI
               </p>
               <p className="text-xs text-gray-500">
-                Tell me where you want to go and how many days — I&apos;ll help plan
-                your trip!
+                Tell me where you want to go and how many days — I&apos;ll help
+                plan your trip!
               </p>
             </div>
           ) : (
@@ -758,7 +805,9 @@ export default function AIPlannerPage() {
         <button
           onClick={() => setActiveMobilePanel("trip")}
           className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
-            activeMobilePanel === "trip" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+            activeMobilePanel === "trip"
+              ? "text-emerald-600 bg-emerald-50"
+              : "text-gray-500"
           }`}
         >
           <MapPin className="w-5 h-5" />
@@ -767,7 +816,9 @@ export default function AIPlannerPage() {
         <button
           onClick={() => setActiveMobilePanel("map")}
           className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
-            activeMobilePanel === "map" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+            activeMobilePanel === "map"
+              ? "text-emerald-600 bg-emerald-50"
+              : "text-gray-500"
           }`}
         >
           <Map className="w-5 h-5" />
@@ -776,13 +827,31 @@ export default function AIPlannerPage() {
         <button
           onClick={() => setActiveMobilePanel("chat")}
           className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
-            activeMobilePanel === "chat" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+            activeMobilePanel === "chat"
+              ? "text-emerald-600 bg-emerald-50"
+              : "text-gray-500"
           }`}
         >
           <Bot className="w-5 h-5" />
           <span className="text-[10px] font-medium">AI Chat</span>
         </button>
       </div>
+
+      {/* Chat History Sidebar */}
+      <ChatHistorySidebar
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        activeConversationId={activeConversationId}
+        onSelectConversation={async (id) => {
+          setActiveConversationId(id);
+          setIsHistoryOpen(false);
+        }}
+        onNewConversation={async () => {
+          reset();
+          setActiveConversationId(null);
+          setIsHistoryOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -94,6 +94,9 @@ interface UseAgentChatReturn {
   budgetData: BudgetData | null;
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
+  updateThreadId: (id: string | null) => void;
+  loadConversation: (messages: ChatMessage[], threadId: string | null) => void;
+  reset: () => void;
 }
 
 let messageCounter = 0;
@@ -139,7 +142,7 @@ async function parseSSE(
 export function useAgentChat(): UseAgentChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadId, setThreadIdState] = useState<string | null>(null);
   const [tripData, setTripData] = useState<PlannedTrip | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -205,115 +208,207 @@ export function useAgentChat(): UseAgentChatReturn {
         // Only send the new message — the backend checkpointer handles history
         const newMessage = { role: "user" as const, content: userContent };
 
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: [newMessage], threadId }),
-          signal: controller.signal,
-        });
+        const BACKEND_URL =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+        // 1. Create or reuse thread
+        let currentThreadId = threadId;
+        if (!currentThreadId) {
+          const threadRes = await fetch(`${BACKEND_URL}/agent/threads`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+          });
+          if (!threadRes.ok) {
+            throw new Error("Failed to create thread: " + threadRes.status);
+          }
+          const threadData = await threadRes.json();
+          currentThreadId = threadData.thread_id;
+          setThreadIdState(currentThreadId);
+        }
+
+        // 2. Stream response
+        const res = await fetch(
+          `${BACKEND_URL}/agent/threads/${currentThreadId}/runs/stream`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              input: { messages: [newMessage] },
+              assistant_id: "travel_agent",
+            }),
+            signal: controller.signal,
+          },
+        );
 
         if (!res.ok || !res.body) {
           throw new Error("Chat request failed: " + res.status);
         }
 
+        // Parse SSE from backend (LangGraph raw events)
         const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        await parseSSE(reader, (event, dataStr) => {
-          try {
-            const data = JSON.parse(dataStr);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            switch (event) {
-              case "text": {
-                fullText += data.content || "";
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId
-                      ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                      : m,
-                  ),
-                );
-                break;
-              }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-              case "tool_start": {
-                const tc: ToolCall = {
-                  id: data.runId || genId(),
-                  name: data.name || "tool",
-                  state: "running",
-                  input: data.input,
-                };
-                toolCalls.push(tc);
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId
-                      ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                      : m,
-                  ),
-                );
-                break;
-              }
+          let currentEventType = "";
 
-              case "tool_end": {
-                const existing = toolCalls.find(
-                  (t) => t.name === data.name && t.state === "running",
-                );
-                if (existing) {
-                  existing.state = "completed";
-                  existing.output = data.output;
-                } else {
-                  toolCalls.push({
-                    id: data.runId || genId(),
-                    name: data.name || "tool",
-                    state: "completed",
-                    output: data.output,
-                  });
-                }
-
-                if (data.name === "generateItemizedBudget") {
-                  try {
-                    const extractedJSON =
-                      typeof data.output === "string"
-                        ? JSON.parse(data.output)
-                        : data.output;
-                    const validData = parseBudgetData(extractedJSON);
-                    if (validData) {
-                      setBudgetData(validData);
-                    }
-                  } catch (e) {
-                    console.error("Failed to parse tool output for budget", e);
-                  }
-                }
-
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId
-                      ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                      : m,
-                  ),
-                );
-                break;
-              }
-
-              case "meta": {
-                if (data.threadId) {
-                  setThreadId(data.threadId);
-                }
-                if (Array.isArray(data.messages)) {
-                  const allAssistantContent = data.messages
-                    .filter((m: any) => m.role === "assistant")
-                    .map((m: any) => m.content)
-                    .join("\n\n");
-                  if (allAssistantContent) {
-                    fullText = allAssistantContent;
-                  }
-                }
-                break;
-              }
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              currentEventType = line.slice(7).trim();
+              continue;
             }
-          } catch {
-            // skip unparseable
+
+            if (!line.startsWith("data: ")) continue;
+            const dataStr = line.slice(6);
+
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (currentEventType === "events") {
+                // Text chunks from the LLM
+                if (data.event === "on_chat_model_stream") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isInsideTool = tags.some(
+                    (t: string) => t === "graph:step:tools",
+                  );
+                  if (isInsideTool) continue;
+
+                  const chunk = data?.data?.chunk;
+                  const content = chunk?.content ?? chunk?.kwargs?.content;
+                  if (content && typeof content === "string") {
+                    fullText += content;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Graph node started
+                if (data.event === "on_chain_start") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
+                  const nodeName = data.name as string;
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
+                    const tc: ToolCall = {
+                      id: data?.run_id || genId(),
+                      name: nodeName,
+                      state: "running",
+                      input: {},
+                    };
+                    toolCalls.push(tc);
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Graph node finished
+                if (data.event === "on_chain_end") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
+                  const nodeName = data.name as string;
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
+                    const existing = toolCalls.find(
+                      (t) => t.name === nodeName && t.state === "running",
+                    );
+                    if (existing) {
+                      existing.state = "completed";
+                      existing.output = null;
+                    }
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Tool events
+                if (data.event === "on_tool_start") {
+                  const toolName = data?.name || "tool";
+                  const tc: ToolCall = {
+                    id: data?.run_id || genId(),
+                    name: toolName,
+                    state: "running",
+                    input: data?.data?.input?.kwargs || data?.data?.input || {},
+                  };
+                  toolCalls.push(tc);
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
+                        : m,
+                    ),
+                  );
+                }
+                if (data.event === "on_tool_end") {
+                  const toolName = data?.name || "tool";
+                  const existing = toolCalls.find(
+                    (t) => t.name === toolName && t.state === "running",
+                  );
+                  if (existing) {
+                    existing.state = "completed";
+                    existing.output = data?.data?.output || null;
+                  }
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
+                        : m,
+                    ),
+                  );
+                }
+              }
+            } catch {
+              // Skip unparseable lines
+            }
           }
-        });
+        }
 
         // Try to extract trip data
         const extracted = extractTripFromMarkdown(fullText);
@@ -349,6 +444,43 @@ export function useAgentChat(): UseAgentChatReturn {
     [isStreaming, threadId, tripData],
   );
 
+  const updateThreadId = useCallback((id: string | null) => {
+    setThreadIdState(id);
+  }, []);
+
+  const loadConversation = useCallback(
+    (loadedMessages: ChatMessage[], loadedThreadId: string | null) => {
+      setMessages(loadedMessages);
+      setThreadIdState(loadedThreadId);
+      setTripData(null);
+      setBudgetData(null);
+
+      // Extract trip data from loaded messages
+      const allText = loadedMessages
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.content)
+        .join("\n\n");
+
+      const extracted = extractTripFromMarkdown(allText);
+      if (extracted) {
+        setTripData(extracted);
+      }
+
+      const extractedBudget = extractBudgetFromMarkdown(allText);
+      if (extractedBudget) {
+        setBudgetData(extractedBudget);
+      }
+    },
+    [],
+  );
+
+  const reset = useCallback(() => {
+    setMessages([]);
+    setThreadIdState(null);
+    setTripData(null);
+    setBudgetData(null);
+  }, []);
+
   return {
     messages,
     isStreaming,
@@ -357,6 +489,9 @@ export function useAgentChat(): UseAgentChatReturn {
     budgetData,
     sendMessage,
     stop,
+    updateThreadId,
+    loadConversation,
+    reset,
   };
 }
 
