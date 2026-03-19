@@ -86,7 +86,7 @@ export default function CreateTripPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                     onSubmit={handleSubmit}
-                    className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl border border-white/50 shadow-2xl shadow-emerald-500/5 space-y-8 relative overflow-hidden"
+                    className="bg-white/80 backdrop-blur-xl p-5 sm:p-8 rounded-3xl border border-white/50 shadow-2xl shadow-emerald-500/5 space-y-6 sm:space-y-8 relative overflow-hidden"
                 >
                     {/* Step Indicator */}
                     <div className="flex items-center justify-center gap-3 text-sm font-medium mb-6">
@@ -149,7 +149,7 @@ export default function CreateTripPage() {
                                         defaultMonth={date?.from}
                                         selected={date}
                                         onSelect={setDate}
-                                        numberOfMonths={2}
+                                        numberOfMonths={1}
                                         className="p-4"
                                     />
                                 </PopoverContent>

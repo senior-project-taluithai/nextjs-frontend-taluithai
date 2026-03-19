@@ -61,4 +61,11 @@ export const eventService = {
     });
     return response.data;
   },
+
+  getEventsByMonth: async (year: number, month: number): Promise<Event[]> => {
+    const response = await api.get<Event[]>(
+      `/events/by-month?year=${year}&month=${month}`,
+    );
+    return response.data;
+  },
 };

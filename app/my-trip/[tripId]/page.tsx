@@ -91,6 +91,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     const [savedType, setSavedType] = useState<'place' | 'event'>('place');
     const [recommendationsPage, setRecommendationsPage] = useState(1);
     const [showMap, setShowMap] = useState(false);
+    const [activeMobilePanel, setActiveMobilePanel] = useState<"itinerary" | "discover">("itinerary");
     const ITEMS_PER_PAGE = 12; // increased for a nicer grid
     const RECOMMENDATIONS_PER_PAGE = 8;
 
@@ -330,25 +331,25 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     return (
         <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f8f9fa]">
             {/* ── Top Header Bar ── */}
-            <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 shadow-sm z-10 shrink-0">
-                <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white border-b border-gray-100 shadow-sm z-10 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
                     <button
                         onClick={() => router.push("/my-trip")}
-                        className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                        className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors shrink-0"
                     >
                         <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div>
+                    <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <h1 className="font-bold text-gray-900" style={{ fontSize: "1rem" }}>
+                            <h1 className="font-bold text-gray-900 text-sm sm:text-base truncate">
                                 {trip.name}
                             </h1>
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${statusConfig.bg} ${statusConfig.color}`}>
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusConfig.bg} ${statusConfig.color}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
                                 {statusConfig.label}
                             </span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 hidden sm:flex">
                             <Calendar className="w-3 h-3" />
                             <span>{format(new Date(trip.start_date), "MMM d")} – {format(new Date(trip.end_date), "MMM d, yyyy")}</span>
                             {trip.provinces && trip.provinces.length > 0 && (
@@ -361,21 +362,21 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                         onClick={() => setIsEditTripOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                        className="flex items-center gap-1.5 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
                     >
                         <Edit2 className="w-3.5 h-3.5" />
-                        Edit
+                        <span className="hidden sm:inline">Edit</span>
                     </button>
 
                     <button
                         onClick={() => setIsDeleteDialogOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-md shadow-red-200"
+                        className="flex items-center gap-1.5 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-md shadow-red-200"
                     >
                         <Trash2 className="w-3.5 h-3.5" />
-                        Delete
+                        <span className="hidden sm:inline">Delete</span>
                     </button>
                 </div>
             </div>
@@ -411,16 +412,32 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
             </AlertDialog>
 
             {/* ── Main Two-Panel Content ── */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
                 {/* ── LEFT: Itinerary Panel ── */}
-                <div className="w-[430px] shrink-0 flex flex-col bg-white border-r border-gray-100 overflow-hidden">
+                <div className={`
+                    flex flex-col bg-white border-r border-gray-100 overflow-hidden
+                    w-full sm:w-[350px] md:w-[380px] lg:w-[430px] shrink-0
+                    absolute sm:relative inset-0 z-20 sm:z-auto transition-transform duration-300
+                    ${activeMobilePanel === "itinerary" ? "translate-x-0" : "-translate-x-full sm:translate-x-0"}
+                `}>
+                    {/* Mobile header */}
+                    <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+                        <p className="font-bold text-gray-900 text-sm">Itinerary</p>
+                        <button
+                            onClick={() => setActiveMobilePanel("discover")}
+                            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     {/* Day tabs */}
                     <div className="flex items-center gap-1.5 px-4 pt-4 pb-3 border-b border-gray-50 overflow-x-auto scrollbar-none">
                         {sortedDays.map((day) => (
                             <button
                                 key={day.id}
                                 onClick={() => setSelectedDay(day.day_number)}
-                                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 shrink-0 ${selectedDay === day.day_number
+                                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 shrink-0 ${selectedDay === day.day_number
                                     ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
                                     : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                                     }`}
@@ -444,12 +461,12 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     </div>
 
                     {/* Place list */}
-                    <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-2.5">
+                    <div className="flex-1 overflow-y-auto px-3 pb-20 sm:pb-4 space-y-2.5">
                         {currentDay?.items.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12 border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
                                 <Plus className="w-8 h-8 opacity-20 mb-2" />
                                 <p className="text-sm font-medium">No items yet</p>
-                                <p className="text-xs opacity-70">Add from map or suggestions on the right</p>
+                                <p className="text-xs opacity-70 text-center px-4">Add from map or suggestions on the right</p>
                             </div>
                         ) : (
                             <DndContext
@@ -487,20 +504,40 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                             </div>
                         )}
                     </div>
-
-
                 </div>
 
+                {/* Mobile overlay backdrop */}
+                {activeMobilePanel === "itinerary" && (
+                    <div
+                        className="sm:hidden fixed inset-0 bg-black/30 z-10"
+                        onClick={() => setActiveMobilePanel("discover")}
+                    />
+                )}
+
                 {/* ── RIGHT: Discover or Map ── */}
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className={`
+                    flex-1 flex flex-col overflow-hidden
+                    ${activeMobilePanel === "discover" ? "block" : "hidden sm:block"}
+                `}>
+                    {/* Mobile header */}
+                    <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0 bg-white">
+                        <p className="font-bold text-gray-900 text-sm">Discover</p>
+                        <button
+                            onClick={() => setActiveMobilePanel("itinerary")}
+                            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     {/* Right panel tab bar */}
-                    <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 shrink-0">
+                    <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white border-b border-gray-100 shrink-0">
                         <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
                             {(["places", "events", "saved", "budget"] as const).map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => { setActiveTab(tab); setShowMap(false); }}
-                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 capitalize shrink-0 ${activeTab === tab && !showMap
+                                    className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 capitalize shrink-0 ${activeTab === tab && !showMap
                                         ? "bg-gray-100 text-gray-900"
                                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                                         }`}
@@ -509,17 +546,17 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                     {tab === "events" && <Calendar className="w-3.5 h-3.5" />}
                                     {tab === "saved" && <Heart className="w-3.5 h-3.5" />}
                                     {tab === "budget" && <Wallet className="w-3.5 h-3.5" />}
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    <span className="hidden xs:inline">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
                                 </button>
                             ))}
                         </div>
                         <button
                             onClick={() => setShowMap(!showMap)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shrink-0 ${showMap ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 shrink-0 ${showMap ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                 }`}
                         >
                             <MapIcon className="w-4 h-4" />
-                            Map View
+                            <span className="hidden sm:inline">Map View</span>
                         </button>
                     </div>
 
@@ -569,7 +606,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                 >
                                     {/* --- PLACES TAB --- */}
                                     {activeTab === 'places' && (
-                                        <div className="px-5 py-4 space-y-8">
+                                        <div className="px-3 sm:px-5 py-4 space-y-8">
                                             <RecommendationSection
                                                 title="Recommended for You"
                                                 icon={Sparkles}
@@ -730,7 +767,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                                     {/* --- EVENTS TAB --- */}
                                     {activeTab === 'events' && (
-                                        <div className="px-5 py-6 space-y-6">
+                                        <div className="px-3 sm:px-5 py-4 sm:py-6 space-y-6">
                                             {/* Search and Filter Bar for Events */}
                                             <div className="flex gap-2 sticky top-0 z-10 bg-[#f8f9fa]/90 backdrop-blur-md pt-1 pb-3 -mx-1 px-1">
                                                 <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-amber-100 focus-within:border-amber-300 transition-all">
@@ -874,7 +911,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
                                     {/* --- SAVED TAB --- */}
                                     {activeTab === 'saved' && (
-                                        <div className="px-5 py-6 space-y-6">
+                                        <div className="px-3 sm:px-5 py-4 sm:py-6 space-y-6">
                                             <div className="flex items-center gap-2 pb-2">
                                                 <button
                                                     onClick={() => { setSavedType('place'); setSavedPage(1); }}
@@ -978,7 +1015,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                                     {/* --- BUDGET TAB --- */}
                                     {activeTab === 'budget' && (
                                         <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
-                                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
+                                            <div className="flex items-center justify-between px-3 sm:px-5 py-4 border-b border-gray-100 bg-white">
                                                 <div>
                                                     <h3 className="font-bold text-gray-900 text-[1.05rem]">Trip Budget</h3>
                                                     <p className="text-xs text-gray-400">Manage your estimated expenses</p>
@@ -1010,6 +1047,28 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                             )}
                         </AnimatePresence>
                     </div>
+                </div>
+
+                {/* Mobile Bottom Navigation */}
+                <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-around gap-2 safe-area-inset-bottom">
+                    <button
+                        onClick={() => setActiveMobilePanel("itinerary")}
+                        className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
+                            activeMobilePanel === "itinerary" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+                        }`}
+                    >
+                        <List className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Itinerary</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveMobilePanel("discover")}
+                        className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
+                            activeMobilePanel === "discover" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+                        }`}
+                    >
+                        <Sparkles className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Discover</span>
+                    </button>
                 </div>
             </div>
         </div>

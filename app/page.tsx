@@ -479,7 +479,7 @@ function FestivalPosterCard({ event, provinces, delay }: { event: Event; provinc
         rotateX, rotateY, transformPerspective: 1000, transformStyle: "preserve-3d",
         filter: hovered ? `drop-shadow(0 25px 45px ${color}40)` : `drop-shadow(0 4px 20px ${color}20)`
       }}
-      className="relative flex-1 min-w-0 rounded-[2rem] overflow-hidden cursor-pointer group border border-gray-100/50 bg-white"
+      className="relative flex-1 min-w-[280px] sm:min-w-0 rounded-[2rem] overflow-hidden cursor-pointer group border border-gray-100/50 bg-white"
     >
       <div className="h-full w-full flex flex-col" onClick={() => router.push(`/event/${event.id}`)}>
         <div className="relative h-80">
@@ -613,39 +613,39 @@ export default function Home() {
       {/* ─── Hero Section ─── */}
       <div className="relative h-[440px] overflow-hidden">
         <Image src={heroImage} alt="Thailand" fill sizes="100vw" quality={80} priority className="object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-[#f8f9fa]" />
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-8 py-4">
-          <span className="bg-white/20 backdrop-blur-sm text-white text-sm px-3 py-1.5 rounded-full border border-white/30 flex items-center gap-1.5">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-transparent" />
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+          <span className="bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm px-3 py-1.5 rounded-full border border-white/30 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5" />Thailand
           </span>
           <button className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 hover:bg-white/30 transition-colors">
             <SlidersHorizontal className="w-4 h-4 text-white" />
           </button>
         </div>
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center -mt-8">
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-8 text-center -mt-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <p className="text-emerald-300 text-sm font-medium tracking-widest uppercase mb-2">Discover Hidden Thailand</p>
-            <h1 className="text-white mb-3" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", fontWeight: 700, lineHeight: 1.2 }}>
+            <p className="text-emerald-300 text-xs sm:text-sm font-medium tracking-widest uppercase mb-2">Discover Hidden Thailand</p>
+            <h1 className="text-white mb-3" style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", fontWeight: 700, lineHeight: 1.2 }}>
               Your Personal Thailand<br />Travel Guide
             </h1>
-            <p className="text-white/70 text-base mb-6 max-w-md">Beyond the tourist trail — explore authentic local gems, cultural wonders, and natural paradises.</p>
+            <p className="text-white/70 text-sm sm:text-base mb-6 max-w-md px-2">Beyond the tourist trail — explore authentic local gems, cultural wonders, and natural paradises.</p>
           </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="w-full max-w-xl relative">
-            <div className={`flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-2xl transition-all duration-200 ${searchFocused ? "ring-2 ring-emerald-400" : ""}`}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="w-full max-w-xl px-4 sm:px-0">
+            <div className={`flex items-center gap-3 bg-white rounded-2xl px-3 sm:px-4 py-3 shadow-2xl transition-all duration-200 ${searchFocused ? "ring-2 ring-emerald-400" : ""}`}>
               <Search className="w-5 h-5 text-gray-400 shrink-0" />
               <input type="text" placeholder="Search destinations, provinces, or activities..."
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-                className="flex-1 outline-none text-gray-700 placeholder-gray-400 bg-transparent text-sm" />
+                className="flex-1 outline-none text-gray-700 placeholder-gray-400 bg-transparent text-sm min-w-0" />
               {searchQuery && (<button onClick={() => setSearchQuery("")}><X className="w-4 h-4 text-gray-400 hover:text-gray-600" /></button>)}
-              <Link href="/explore" className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors whitespace-nowrap">Search</Link>
+              <Link href="/explore" className="bg-emerald-500 text-white px-3 sm:px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors whitespace-nowrap shrink-0">Search</Link>
             </div>
           </motion.div>
         </div>
       </div>
 
       {/* ─── Content ─── */}
-      <div className="px-8 pb-12 -mt-2">
+      <div className="px-4 sm:px-6 lg:px-8 xl:px-12 pb-12 -mt-2 max-w-[1400px] mx-auto">
         {/* Season Filter */}
         <div className="flex gap-3 mb-6 pt-4 overflow-x-auto scrollbar-hide">
           {seasons.map((season) => {
@@ -673,10 +673,10 @@ export default function Home() {
         </div>
 
         {/* Category Filter */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-8 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-8 scrollbar-hide max-w-full">
           {categories.map((cat) => (
             <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${activeCategory === cat.id ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap shrink-0 transition-all duration-200 ${activeCategory === cat.id ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
                 }`}>
               <span>{cat.icon}</span>{cat.label}
             </button>
@@ -686,8 +686,8 @@ export default function Home() {
         {/* ═══ Section 01: AI-Curated Recommendations (Bento Grid) ═══ */}
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">
-            <div className="flex items-start gap-4">
-              <span className="font-black text-gray-200 select-none leading-none mt-1" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>01</span>
+            <div className="flex items-start gap-2 sm:gap-4">
+              <span className="font-black text-gray-200 select-none leading-none mt-1 hidden sm:block" style={{ fontSize: "clamp(2.5rem, 4vw, 3.5rem)", lineHeight: 0.9 }}>01</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <motion.span animate={{ opacity: [1, 0.7, 1] }} transition={{ repeat: Infinity, duration: 2 }}
@@ -712,8 +712,8 @@ export default function Home() {
           {isLoadingRecommended ? <LoadingSkeleton /> : (
             <>
               {/* Bento Grid */}
-              <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr", minHeight: 380 }}>
-                {heroPlace && <div className="row-span-3" style={{ minHeight: 380 }}><HeroCard place={heroPlace} provinces={provinces} index={0} /></div>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {heroPlace && <div className="sm:row-span-3"><HeroCard place={heroPlace} provinces={provinces} index={0} /></div>}
                 {rankCards.map((p, i) => <RankCard key={p.id} place={p} provinces={provinces} rank={i + 2} delay={0.15 + i * 0.12} />)}
               </div>
               {/* More Picks Scroll */}
@@ -738,8 +738,8 @@ export default function Home() {
         {/* ═══ Section 02: Trending Now ═══ */}
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">
-            <div className="flex items-start gap-4">
-              <span className="font-black text-gray-200 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>02</span>
+            <div className="flex items-start gap-2 sm:gap-4">
+              <span className="font-black text-gray-200 select-none leading-none mt-1 hidden sm:block" style={{ fontSize: "clamp(2.5rem, 4vw, 3.5rem)", lineHeight: 0.9 }}>02</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-lg shadow-orange-200/60"
@@ -781,11 +781,11 @@ export default function Home() {
         </section>
 
         {/* ═══ Section 03: Off the Map Hidden Gems ═══ */}
-        <section className="mb-12 py-12 px-8 -mx-8 bg-[#0a0a0a] relative overflow-hidden">
+        <section className="mb-12 py-8 sm:py-12 px-4 sm:px-8 lg:px-0 -mx-4 sm:-mx-6 lg:-mx-8 bg-[#0a0a0a] relative overflow-hidden rounded-2xl">
           <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 50% 0%, #059669 0%, transparent 70%)" }} />
-          <div className="relative z-10 flex items-end justify-between mb-8">
-            <div className="flex items-start gap-4">
-              <span className="font-black text-white/20 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>03</span>
+          <div className="relative z-10 flex items-end justify-between mb-6 sm:mb-8 px-2">
+            <div className="flex items-start gap-2 sm:gap-4">
+              <span className="font-black text-white/20 select-none leading-none mt-1 hidden sm:block" style={{ fontSize: "clamp(2.5rem, 4vw, 3.5rem)", lineHeight: 0.9 }}>03</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-900 bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]">
@@ -811,9 +811,9 @@ export default function Home() {
         {/* ═══ Section 04: Upcoming Festivals (Poster Cards) ═══ */}
         {upcomingEvents.length > 0 && (
           <section className="mb-12">
-            <div className="flex items-end justify-between mb-6">
-              <div className="flex items-start gap-4">
-                <span className="font-black text-gray-200 select-none leading-none" style={{ fontSize: "3.5rem", lineHeight: 0.9 }}>04</span>
+          <div className="flex items-end justify-between mb-6">
+              <div className="flex items-start gap-2 sm:gap-4">
+                <span className="font-black text-gray-200 select-none leading-none mt-1 hidden sm:block" style={{ fontSize: "clamp(2.5rem, 4vw, 3.5rem)", lineHeight: 0.9 }}>04</span>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-md shadow-pink-200/60"
@@ -830,7 +830,7 @@ export default function Home() {
               </Link>
             </div>
             {isLoadingEvents ? <LoadingSkeleton /> : (
-              <div className="flex gap-5">
+              <div className="flex gap-3 sm:gap-5 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
                 {upcomingEvents.slice(0, 3).map((event, i) => (
                   <FestivalPosterCard key={event.id} event={event} provinces={provinces} delay={i * 0.1} />
                 ))}

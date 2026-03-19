@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
-import { MapPin, Bot, Sparkles } from "lucide-react";
+import { MapPin, Bot, Sparkles, Map, X } from "lucide-react";
 import { eventService } from "@/lib/services/event";
 
 import {
@@ -267,6 +267,7 @@ export default function AIPlannerPage() {
   });
   const [isConfirming, setIsConfirming] = useState(false);
   const [text, setText] = useState("");
+  const [activeMobilePanel, setActiveMobilePanel] = useState<"trip" | "map" | "chat">("chat");
 
   // Sync trip data from agent response
   useEffect(() => {
@@ -436,8 +437,14 @@ export default function AIPlannerPage() {
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
-      {/* Trip Result Panel (left) */}
-      <div className="relative z-10 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 shadow-sm w-[320px]">
+      {/* Trip Result Panel (left) - hidden on mobile unless active */}
+      <div className={`
+        relative z-10 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 shadow-sm
+        w-0 lg:w-[280px] xl:w-[320px]
+        transition-all duration-300 overflow-hidden
+        ${activeMobilePanel === "trip" ? "w-full lg:w-[280px] xl:w-[320px] !overflow-auto" : "w-0 lg:w-[280px] xl:w-[320px]"}
+        hidden lg:flex
+      `}>
         <TripResultPanel
           tripName={trip.name}
           days={trip.days}
@@ -448,6 +455,31 @@ export default function AIPlannerPage() {
         />
       </div>
 
+      {/* Mobile overlay for Trip Panel */}
+      {activeMobilePanel === "trip" && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-white flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+            <h3 className="font-bold text-gray-900 text-sm">Trip Plan</h3>
+            <button
+              onClick={() => setActiveMobilePanel("map")}
+              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <TripResultPanel
+              tripName={trip.name}
+              days={trip.days}
+              budget={trip.budget}
+              budgetData={budgetData}
+              onConfirm={handleConfirmTrip}
+              isConfirming={isConfirming}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Center Area (Map) */}
       <div className="flex-1 relative overflow-hidden bg-muted/10">
         <div className="absolute inset-0">
@@ -455,8 +487,12 @@ export default function AIPlannerPage() {
         </div>
       </div>
 
-      {/* Chat Panel (right) */}
-      <div className="w-[400px] flex flex-col bg-white border-l border-gray-100 shadow-sm shrink-0 relative overflow-hidden z-10">
+      {/* Chat Panel (right) - full width on mobile */}
+      <div className={`
+        flex flex-col bg-white border-l border-gray-100 shadow-sm relative overflow-hidden z-10
+        w-full sm:w-[400px] md:w-[400px] lg:w-[360px] xl:w-[400px]
+        ${activeMobilePanel === "chat" ? "flex" : "hidden sm:flex"}
+      `}>
         {/* Chat Header */}
         <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -476,9 +512,9 @@ export default function AIPlannerPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="flex flex-col items-center justify-center h-full text-center px-2 sm:px-4">
               <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
                 <Bot className="w-6 h-6 text-emerald-500" />
               </div>
@@ -486,7 +522,7 @@ export default function AIPlannerPage() {
                 Welcome to TaluiThai AI
               </p>
               <p className="text-xs text-gray-500">
-                Tell me where you want to go and how many days — I'll help plan
+                Tell me where you want to go and how many days — I&apos;ll help plan
                 your trip!
               </p>
             </div>
@@ -517,7 +553,7 @@ export default function AIPlannerPage() {
                     </div>
                     <div className="max-w-[85%] relative">
                       <div
-                        className="rounded-2xl rounded-br-sm px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
+                        className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
                         style={{
                           background:
                             "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
@@ -535,7 +571,7 @@ export default function AIPlannerPage() {
                       <Bot className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div className="flex-1 max-w-[calc(100%-2rem)]">
-                      <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+                      <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
                         {(() => {
                           const isCurrentlyStreaming =
                             isStreaming &&
@@ -626,7 +662,7 @@ export default function AIPlannerPage() {
 
         {/* Quick Prompts (only shown initially) */}
         {messages.length === 0 && (
-          <div className="px-4 pb-3">
+          <div className="px-3 sm:px-4 pb-3">
             <p className="text-xs text-gray-400 mb-2">Quick start:</p>
             <div className="grid grid-cols-2 gap-1.5">
               {[
@@ -660,7 +696,7 @@ export default function AIPlannerPage() {
         )}
 
         {/* Input Area */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white">
+        <div className="px-3 sm:px-4 py-3 border-t border-gray-100 bg-white shrink-0">
           <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20 transition-all">
             <input
               type="text"
@@ -673,7 +709,7 @@ export default function AIPlannerPage() {
                 }
               }}
               placeholder="Plan a trip..."
-              className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
+              className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-gray-700 placeholder-gray-400"
             />
             {isStreaming ? (
               <button
@@ -715,6 +751,37 @@ export default function AIPlannerPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-around gap-2 safe-area-inset-bottom">
+        <button
+          onClick={() => setActiveMobilePanel("trip")}
+          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
+            activeMobilePanel === "trip" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+          }`}
+        >
+          <MapPin className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Trip</span>
+        </button>
+        <button
+          onClick={() => setActiveMobilePanel("map")}
+          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
+            activeMobilePanel === "map" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+          }`}
+        >
+          <Map className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Map</span>
+        </button>
+        <button
+          onClick={() => setActiveMobilePanel("chat")}
+          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
+            activeMobilePanel === "chat" ? "text-emerald-600 bg-emerald-50" : "text-gray-500"
+          }`}
+        >
+          <Bot className="w-5 h-5" />
+          <span className="text-[10px] font-medium">AI Chat</span>
+        </button>
       </div>
     </div>
   );

@@ -17,6 +17,12 @@ export interface Event {
   categories: string[];
   event_reviews?: any[];
   review_count: number;
+  province?: {
+    id: number;
+    name: string;
+    name_en: string;
+    region_name: string;
+  };
 }
 
 export interface ExploreEventsQuery {
@@ -28,7 +34,7 @@ export interface ExploreEventsQuery {
   page?: number;
   limit?: number;
   orderField?: string;
-  orderDir?: 'ASC' | 'DESC';
+  orderDir?: "ASC" | "DESC";
 }
 
-export type CreateEventDto = Omit<Event, 'id' | 'rating'>;
+export type CreateEventDto = Omit<Event, "id" | "rating">;

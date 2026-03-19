@@ -53,21 +53,21 @@ export default function LoginPage() {
                 className="w-full max-w-[440px] z-10"
             >
                 <Card className="border-0 shadow-2xl rounded-[2.5rem] overflow-hidden bg-white/100">
-                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-10 text-center relative overflow-hidden">
+                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 sm:p-10 text-center relative overflow-hidden">
                         <div className="absolute inset-0 bg-black/5" />
                         <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/30"
+                            className="bg-white/20 w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/30"
                         >
-                            <UserCircle className="w-10 h-10 text-white" />
+                            <UserCircle className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                         </motion.div>
-                        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
-                        <p className="text-emerald-50/80 text-sm font-medium">Log in to continue your journey</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
+                        <p className="text-emerald-50/80 text-xs sm:text-sm font-medium">Log in to continue your journey</p>
                     </div>
 
-                    <CardContent className="p-10 pt-8">
+                    <CardContent className="p-6 sm:p-10 pt-6 sm:pt-8">
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 text-left block">Email Address</label>

@@ -59,23 +59,23 @@ export default function RegisterPage() {
                 className="w-full max-w-[500px] z-10 my-8"
             >
                 <Card className="border-0 shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
-                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-center relative overflow-hidden">
+                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 sm:p-8 text-center relative overflow-hidden">
                         <div className="absolute inset-0 bg-black/5" />
                         <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/30"
+                            className="bg-white/20 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/30"
                         >
-                            <UserPlus className="w-8 h-8 text-white" />
+                            <UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                         </motion.div>
-                        <h1 className="text-2xl font-bold text-white mb-1 tracking-tight">Create Account</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 tracking-tight">Create Account</h1>
                         <p className="text-emerald-50/80 text-xs font-medium">Join us and start your adventure</p>
                     </div>
 
-                    <CardContent className="p-8 pb-10">
+                    <CardContent className="p-5 sm:p-8 pb-8 sm:pb-10">
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 block text-left">First Name</label>
                                     <div className={`flex items-center gap-3 bg-gray-50 border transition-all duration-200 rounded-2xl px-4 py-3 ${errors.firstName ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-100 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10'}`}>
