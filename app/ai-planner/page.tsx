@@ -17,6 +17,7 @@ import {
   useAgentChat,
   type PlannedTrip,
   type ToolCall,
+  type RouteData,
 } from "@/hooks/useAgentChat";
 import { TripDayCards } from "@/components/ai-planner/trip-day-cards";
 import {
@@ -31,7 +32,13 @@ import { Loader } from "@/components/ai/loader";
 
 /** Strip JSON code blocks from displayed message (trip data already extracted) */
 function stripJsonBlocks(text: string): string {
-  return text.replace(/```(?:json)?\s*\n[\s\S]*?```/g, "").trim();
+  // Remove complete fenced JSON blocks
+  let cleaned = text.replace(/```(?:json)?\s*\n[\s\S]*?```/g, "");
+  // Remove truncated/unclosed fenced JSON blocks (when LLM hits token limit mid-output)
+  cleaned = cleaned.replace(/```(?:json)?\s*\n[\s\S]*$/g, "");
+  // Remove standalone large JSON objects/arrays that weren't fenced (starts with { or [ on its own line)
+  cleaned = cleaned.replace(/^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm, "");
+  return cleaned.trim();
 }
 
 /**
@@ -251,6 +258,9 @@ export default function AIPlannerPage() {
     isStreaming,
     tripData,
     budgetData,
+    hotelData,
+    routeData,
+    setRouteData,
     sendMessage,
     stop,
     updateThreadId,
@@ -301,6 +311,54 @@ export default function AIPlannerPage() {
       toast.success(`Trip "${tripData.name}" updated: ${totalPlaces} places`);
     }
   }, [tripData]);
+
+  // Auto-call route planner when tripData + hotelData are both available
+  useEffect(() => {
+    if (!tripData || !hotelData || routeData) return;
+
+    const places = tripData.days.flatMap((d) =>
+      d.items
+        .filter((i) => i.latitude && i.longitude)
+        .map((i) => ({
+          name: i.name,
+          latitude: i.latitude!,
+          longitude: i.longitude!,
+          pg_place_id: i.pg_place_id,
+          category: i.category,
+        })),
+    );
+
+    const hotels = hotelData.hotels.map((h) => ({
+      name: h.name,
+      latitude: h.latitude,
+      longitude: h.longitude,
+      rating: h.rating,
+      price_range: h.priceRange,
+    }));
+
+    if (places.length === 0 || hotels.length === 0) return;
+
+    const BACKEND_URL =
+      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    fetch(`${BACKEND_URL}/route-planner/plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        user_location: { latitude: 13.7563, longitude: 100.5018 },
+        destination_province: tripData.province || "",
+        num_days: tripData.days.length,
+        places,
+        shortlisted_hotels: hotels,
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setRouteData(data);
+      })
+      .catch((err) => console.warn("Route planner failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripData, hotelData]);
 
   const handleSubmit = () => {
     if (!text.trim()) return;
@@ -446,12 +504,36 @@ export default function AIPlannerPage() {
   };
 
   // Flatten items for map display
-  const mapItems = trip.days.flatMap((d) =>
+  const tripMapItems = trip.days.flatMap((d) =>
     d.items.map((i) => ({
       ...i,
       id: i.id || Math.random().toString(36).substr(2, 9),
     })),
   );
+
+  // Include hotels on map
+  const hotelMapItems = hotelData?.hotels?.map((h, idx) => ({
+    id: `hotel-${idx}-${h.name}`,
+    name: h.name,
+    category: 'hotel',
+    latitude: h.latitude,
+    longitude: h.longitude,
+    rating: h.rating,
+    thumbnail_url: h.thumbnail,
+    priceRange: h.priceRange,
+    bookingUrl: h.bookingUrl,
+    address: h.address,
+  })) || [];
+
+  const mapItems = [...tripMapItems, ...hotelMapItems];
+
+  // Build route geometries for map polylines
+  const routeGeometries = routeData?.itinerary
+    ?.filter((day) => day.geometry?.coordinates?.length)
+    .map((day) => ({
+      day: day.day,
+      coordinates: day.geometry!.coordinates,
+    })) || [];
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
@@ -470,6 +552,8 @@ export default function AIPlannerPage() {
           days={trip.days}
           budget={trip.budget}
           budgetData={budgetData}
+          hotelData={hotelData}
+          routeData={routeData}
           onConfirm={handleConfirmTrip}
           isConfirming={isConfirming}
         />
@@ -493,6 +577,7 @@ export default function AIPlannerPage() {
               days={trip.days}
               budget={trip.budget}
               budgetData={budgetData}
+              routeData={routeData}
               onConfirm={handleConfirmTrip}
               isConfirming={isConfirming}
             />
@@ -503,7 +588,7 @@ export default function AIPlannerPage() {
       {/* Center Area (Map) */}
       <div className="flex-1 relative overflow-hidden bg-muted/10">
         <div className="absolute inset-0">
-          <BackgroundMap items={mapItems} />
+          <BackgroundMap items={mapItems} routeGeometries={routeGeometries} />
         </div>
       </div>
 

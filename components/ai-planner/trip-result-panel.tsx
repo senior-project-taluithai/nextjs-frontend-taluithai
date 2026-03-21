@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Clock, Star, MapPin, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { BudgetPanel } from "@/components/ai-planner/budget-panel";
-import type { BudgetData } from "@/hooks/useAgentChat";
+import { HotelPanel } from "@/components/ai-planner/hotel-panel";
+import type { BudgetData, HotelData, RouteData } from "@/hooks/useAgentChat";
+import { Car, Info } from "lucide-react";
 
 interface TripItem {
     id?: string;
@@ -34,15 +36,24 @@ interface TripResultPanelProps {
     days: TripDay[];
     budget?: BudgetBreakdown;
     budgetData?: BudgetData | null;
+    hotelData?: HotelData | null;
+    routeData?: RouteData | null;
     onConfirm: () => void;
     isConfirming: boolean;
 }
 
-export function TripResultPanel({ tripName, days, budget: _budget, budgetData, onConfirm, isConfirming }: TripResultPanelProps) {
+export function TripResultPanel({ tripName, days, budget: _budget, budgetData, hotelData, routeData, onConfirm, isConfirming }: TripResultPanelProps) {
     const totalPlaces = days.reduce((sum, d) => sum + d.items.length, 0);
     // Initialize expanded days array with all days initially expanded
     const [expandedDays, setExpandedDays] = useState<number[]>(days.map(d => d.day));
-    const [activeView, setActiveView] = useState<"itinerary" | "budget">("itinerary");
+    const [activeView, setActiveView] = useState<"itinerary" | "hotels" | "budget">("itinerary");
+
+    const hasTabs = !!(budgetData || hotelData);
+    const tabs: { key: typeof activeView; label: string }[] = [
+        { key: "itinerary", label: "Itinerary" },
+        ...(hotelData ? [{ key: "hotels" as const, label: "Hotels" }] : []),
+        ...(budgetData ? [{ key: "budget" as const, label: "Budget" }] : []),
+    ];
 
     // Update expandedDays if days prop changes and new days are added
     // This simple approach just ensures newly planned days are visible
@@ -69,28 +80,21 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
                             </div>
                         </div>
                     </div>
-                    {budgetData && (
-                        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-gray-50 p-1">
-                            <button
-                                onClick={() => setActiveView("itinerary")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    activeView === "itinerary"
-                                        ? "bg-white text-gray-900 shadow-sm"
-                                        : "text-gray-500 hover:text-gray-700"
-                                }`}
-                            >
-                                Itinerary
-                            </button>
-                            <button
-                                onClick={() => setActiveView("budget")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    activeView === "budget"
-                                        ? "bg-white text-gray-900 shadow-sm"
-                                        : "text-gray-500 hover:text-gray-700"
-                                }`}
-                            >
-                                Budget
-                            </button>
+                    {hasTabs && (
+                        <div className={`mt-3 grid gap-2 rounded-lg bg-gray-50 p-1`} style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+                            {tabs.map((tab) => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setActiveView(tab.key)}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                        activeView === tab.key
+                                            ? "bg-white text-gray-900 shadow-sm"
+                                            : "text-gray-500 hover:text-gray-700"
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -98,7 +102,9 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
 
             {/* Scroll Area */}
             <div className={`flex-1 overflow-y-auto ${activeView === "itinerary" ? "px-3 py-3" : ""}`}>
-                {activeView === "itinerary" ? (
+                {activeView === "hotels" ? (
+                    <HotelPanel data={hotelData} />
+                ) : activeView === "itinerary" ? (
                     days.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 mt-4 mx-3">
                             <p className="text-sm font-medium text-gray-600 mb-1">No itinerary yet.</p>
@@ -106,8 +112,10 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
                         </div>
                     ) : (
                         <div className="space-y-2.5">
-                            {days.map((dayData) => (
-                                <div key={dayData.day} className="bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                            {days.map((dayData, dayIdx) => {
+                                const routeDay = routeData?.itinerary?.find(r => r.day === dayData.day);
+                                return (
+                                <div key={`${dayData.day}-${dayIdx}`} className="bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100">
                                     <button
                                         onClick={() => toggleDay(dayData.day)}
                                         className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-100 transition-colors"
@@ -119,6 +127,14 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
                                             <span className="font-semibold text-gray-900 text-sm">Day {dayData.day}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            {routeDay && (
+                                                <span className="flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                                    <Car className="w-3 h-3" />
+                                                    {routeDay.daily_distance_km.toFixed(1)} km
+                                                    <span className="text-blue-400">·</span>
+                                                    {routeDay.daily_duration_mins} min
+                                                </span>
+                                            )}
                                             <span className="text-xs text-gray-400">{dayData.items.length} places</span>
                                             {expandedDays.includes(dayData.day) ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                                         </div>
@@ -126,6 +142,12 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
 
                                     {expandedDays.includes(dayData.day) && (
                                         <div className="px-3 pb-3 space-y-2">
+                                            {routeDay?.transit_advice && (
+                                                <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                                                    <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                                                    <span className="text-[11px] text-blue-700">{routeDay.transit_advice}</span>
+                                                </div>
+                                            )}
                                             {dayData.items.map((item, idx) => (
                                                 <div key={idx} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-default">
                                                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -158,7 +180,25 @@ export function TripResultPanel({ tripName, days, budget: _budget, budgetData, o
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
+                            {routeData?.summary && (
+                                <div className="mt-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-blue-800">
+                                        <Car className="w-4 h-4" />
+                                        <span>Total driving: {routeData.summary.total_driving_distance_km.toFixed(1)} km</span>
+                                        <span className="text-blue-400">·</span>
+                                        <span>{Math.round(routeData.summary.total_driving_duration_mins)} min</span>
+                                    </div>
+                                    {routeData.summary.hotels_used.length > 0 && (
+                                        <div className="mt-1.5 text-[10px] text-blue-600">
+                                            {routeData.summary.hotels_used.map((h, i) => (
+                                                <span key={i}>{h.name} ({h.nights} night{h.nights > 1 ? 's' : ''}){i < routeData.summary.hotels_used.length - 1 ? ' · ' : ''}</span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )
                 ) : (

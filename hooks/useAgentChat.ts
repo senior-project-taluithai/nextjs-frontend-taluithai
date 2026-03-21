@@ -64,6 +64,60 @@ export interface BudgetData {
   expenses?: BudgetExpense[];
 }
 
+export interface HotelPrice {
+  provider: string;
+  price: number;
+  link: string;
+}
+
+export interface HotelItem {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  rating: number;
+  reviewCount: number;
+  priceRange: string;
+  thumbnail: string;
+  website: string;
+  bookingUrl: string;
+  prices: HotelPrice[];
+  imageUrls: string[];
+  amenities: string[];
+}
+
+export interface HotelData {
+  hotels: HotelItem[];
+}
+
+export interface RouteStop {
+  type: "start" | "place" | "hotel";
+  name: string;
+  lat: number;
+  lng: number;
+  pg_place_id?: number;
+  hotel_id?: string;
+  category?: string;
+}
+
+export interface ItineraryDay {
+  day: number;
+  transit_advice: string | null;
+  route: RouteStop[];
+  daily_distance_km: number;
+  daily_duration_mins: number;
+  geometry: { type: string; coordinates: [number, number][] } | null;
+}
+
+export interface RouteData {
+  itinerary: ItineraryDay[];
+  summary: {
+    total_driving_distance_km: number;
+    total_driving_duration_mins: number;
+    hotels_used: { name: string; nights: number }[];
+  };
+}
+
 export interface PlannedDay {
   day: number;
   items: PlannedDayItem[];
@@ -92,6 +146,9 @@ interface UseAgentChatReturn {
   threadId: string | null;
   tripData: PlannedTrip | null;
   budgetData: BudgetData | null;
+  hotelData: HotelData | null;
+  routeData: RouteData | null;
+  setRouteData: (data: RouteData | null) => void;
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
   updateThreadId: (id: string | null) => void;
@@ -145,6 +202,8 @@ export function useAgentChat(): UseAgentChatReturn {
   const [threadId, setThreadIdState] = useState<string | null>(null);
   const [tripData, setTripData] = useState<PlannedTrip | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const [hotelData, setHotelData] = useState<HotelData | null>(null);
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -272,6 +331,31 @@ export function useAgentChat(): UseAgentChatReturn {
 
             try {
               const data = JSON.parse(dataStr);
+
+              // Process the final 'values' event — contains complete state from all agents
+              if (currentEventType === "values") {
+                const msgs = Array.isArray(data.messages) ? data.messages : [];
+                const allAiText = msgs
+                  .filter(
+                    (m: Record<string, unknown>) =>
+                      m.type === "ai" &&
+                      typeof m.content === "string" &&
+                      m.content,
+                  )
+                  .map((m: Record<string, unknown>) => m.content as string)
+                  .join("\n\n");
+
+                if (allAiText) {
+                  const trip = extractTripFromMarkdown(allAiText);
+                  if (trip) setTripData(trip);
+                  const budget = extractBudgetFromMarkdown(allAiText);
+                  if (budget) setBudgetData(budget);
+                  const hotel = extractHotelFromMarkdown(allAiText);
+                  if (hotel) setHotelData(hotel);
+                  const route = extractRouteFromMarkdown(allAiText);
+                  if (route) setRouteData(route);
+                }
+              }
 
               if (currentEventType === "events") {
                 // Text chunks from the LLM
@@ -410,7 +494,7 @@ export function useAgentChat(): UseAgentChatReturn {
           }
         }
 
-        // Try to extract trip data
+        // Try to extract trip/budget/hotel data from streamed text
         const extracted = extractTripFromMarkdown(fullText);
         if (extracted) {
           setTripData(extracted);
@@ -419,6 +503,16 @@ export function useAgentChat(): UseAgentChatReturn {
         const extractedBudget = extractBudgetFromMarkdown(fullText);
         if (extractedBudget) {
           setBudgetData(extractedBudget);
+        }
+
+        const extractedHotel = extractHotelFromMarkdown(fullText);
+        if (extractedHotel) {
+          setHotelData(extractedHotel);
+        }
+
+        const extractedRoute = extractRouteFromMarkdown(fullText);
+        if (extractedRoute) {
+          setRouteData(extractedRoute);
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {
@@ -454,8 +548,10 @@ export function useAgentChat(): UseAgentChatReturn {
       setThreadIdState(loadedThreadId);
       setTripData(null);
       setBudgetData(null);
+      setHotelData(null);
+      setRouteData(null);
 
-      // Extract trip data from loaded messages
+      // Extract trip/budget/hotel data from loaded messages
       const allText = loadedMessages
         .filter((m) => m.role === "assistant")
         .map((m) => m.content)
@@ -470,6 +566,16 @@ export function useAgentChat(): UseAgentChatReturn {
       if (extractedBudget) {
         setBudgetData(extractedBudget);
       }
+
+      const extractedHotel = extractHotelFromMarkdown(allText);
+      if (extractedHotel) {
+        setHotelData(extractedHotel);
+      }
+
+      const extractedRoute = extractRouteFromMarkdown(allText);
+      if (extractedRoute) {
+        setRouteData(extractedRoute);
+      }
     },
     [],
   );
@@ -479,6 +585,8 @@ export function useAgentChat(): UseAgentChatReturn {
     setThreadIdState(null);
     setTripData(null);
     setBudgetData(null);
+    setHotelData(null);
+    setRouteData(null);
   }, []);
 
   return {
@@ -487,6 +595,9 @@ export function useAgentChat(): UseAgentChatReturn {
     threadId,
     tripData,
     budgetData,
+    hotelData,
+    routeData,
+    setRouteData,
     sendMessage,
     stop,
     updateThreadId,
@@ -591,6 +702,7 @@ function findTripObject(obj: Record<string, unknown>): PlannedTrip | null {
  * Looks for JSON code blocks with { total, categories } structure.
  */
 function extractBudgetFromMarkdown(text: string): BudgetData | null {
+  // Try fenced code blocks first
   const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
   let match;
   while ((match = jsonBlockRegex.exec(text)) !== null) {
@@ -604,6 +716,23 @@ function extractBudgetFromMarkdown(text: string): BudgetData | null {
       // not valid JSON, try next block
     }
   }
+
+  // Fallback: try to find unfenced JSON with budget keys
+  const unfencedRegex =
+    /\{[\s\S]*?"categories"\s*:\s*\[[\s\S]*?"expenses"\s*:\s*\[[\s\S]*?\]\s*\}/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(unfencedMatch[0]);
+      const budgetObject = findBudgetObject(parsed);
+      if (budgetObject) {
+        return parseBudgetData(budgetObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
   return null;
 }
 
@@ -795,5 +924,265 @@ function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
         : [],
     })),
     budget: (parsed.budget as PlannedTrip["budget"]) || undefined,
+  };
+}
+
+/**
+ * Try to extract hotel data from the AI markdown response.
+ * Looks for JSON code blocks with { hotels: [...] } structure.
+ */
+function extractHotelFromMarkdown(text: string): HotelData | null {
+  // Try fenced code blocks first
+  const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const hotelObject = findHotelObject(parsed);
+      if (hotelObject) {
+        return parseHotelData(hotelObject);
+      }
+    } catch {
+      // not valid JSON, try next block
+    }
+  }
+
+  // Fallback: try to find unfenced JSON with "hotels" key
+  // This handles cases where JSON is truncated (missing closing ```)
+  const unfencedRegex = /\{[\s\S]*?"hotels"\s*:\s*\[/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      // Find the start of the JSON
+      const startIdx = unfencedMatch.index;
+      // Try to find a reasonable end point - look for }] or ]] or similar
+      const possibleEnds = [
+        text.indexOf("]}", startIdx),
+        text.indexOf('"]', startIdx),
+        text.indexOf("}\n", startIdx),
+      ];
+      let endIdx = -1;
+      for (const idx of possibleEnds) {
+        if (idx !== -1 && idx < startIdx + 50000) {
+          // sanity limit
+          endIdx = idx + 2;
+          break;
+        }
+      }
+
+      if (endIdx === -1) continue;
+
+      const jsonStr = text.slice(startIdx, endIdx + 1);
+      const parsed = JSON.parse(jsonStr);
+      const hotelObject = findHotelObject(parsed);
+      if (hotelObject) {
+        return parseHotelData(hotelObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
+  return null;
+}
+
+function findHotelObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const obj = value as Record<string, unknown>;
+  if (Array.isArray(obj.hotels) && obj.hotels.length > 0) {
+    // Verify at least one item looks like a hotel (has name and latitude/address)
+    const first = obj.hotels[0] as Record<string, unknown>;
+    if (first && typeof first.name === "string") {
+      return obj;
+    }
+  }
+
+  for (const nested of Object.values(obj)) {
+    const found = findHotelObject(nested);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function parseHotelData(raw: Record<string, unknown>): HotelData {
+  const hotels = Array.isArray(raw.hotels)
+    ? raw.hotels
+        .filter(
+          (h): h is Record<string, unknown> => !!h && typeof h === "object",
+        )
+        .map((h) => ({
+          name: (typeof h.name === "string" && h.name) || "",
+          address: (typeof h.address === "string" && h.address) || "",
+          latitude: typeof h.latitude === "number" ? h.latitude : 0,
+          longitude: typeof h.longitude === "number" ? h.longitude : 0,
+          rating: typeof h.rating === "number" ? h.rating : 0,
+          reviewCount: typeof h.reviewCount === "number" ? h.reviewCount : 0,
+          priceRange: (typeof h.priceRange === "string" && h.priceRange) || "",
+          thumbnail:
+            sanitizeThumbnailUrl(h.thumbnail) ||
+            sanitizeThumbnailUrl(h.thumbnail_url) ||
+            "",
+          website: (typeof h.website === "string" && h.website) || "",
+          bookingUrl: (typeof h.bookingUrl === "string" && h.bookingUrl) || "",
+          prices: Array.isArray(h.prices)
+            ? h.prices
+                .filter(
+                  (p): p is Record<string, unknown> =>
+                    !!p && typeof p === "object",
+                )
+                .map((p) => ({
+                  provider:
+                    (typeof p.provider === "string" && p.provider) || "",
+                  price: typeof p.price === "number" ? p.price : 0,
+                  link: (typeof p.link === "string" && p.link) || "",
+                }))
+            : [],
+          imageUrls: Array.isArray(h.imageUrls)
+            ? h.imageUrls.filter(
+                (url): url is string =>
+                  typeof url === "string" && url.length > 0,
+              )
+            : [],
+          amenities: Array.isArray(h.amenities) ? h.amenities : [],
+        }))
+    : [];
+
+  return { hotels };
+}
+
+/**
+ * Try to extract route data from the AI markdown response.
+ * Looks for JSON code blocks with { itinerary: [...], summary: {...} } structure.
+ */
+function extractRouteFromMarkdown(text: string): RouteData | null {
+  // Try fenced code blocks first
+  const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const routeObject = findRouteObject(parsed);
+      if (routeObject) {
+        return parseRouteData(routeObject);
+      }
+    } catch {
+      // not valid JSON, try next block
+    }
+  }
+
+  // Fallback: try to find unfenced JSON with route keys
+  const unfencedRegex =
+    /\{[\s\S]*?"itinerary"\s*:\s*\[[\s\S]*?"summary"\s*:\s*\{[\s\S]*?}/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(unfencedMatch[0]);
+      const routeObject = findRouteObject(parsed);
+      if (routeObject) {
+        return parseRouteData(routeObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
+  return null;
+}
+
+function findRouteObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findRouteObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const obj = value as Record<string, unknown>;
+  // Check if this has itinerary array and summary object
+  if (
+    Array.isArray(obj.itinerary) &&
+    obj.summary &&
+    typeof obj.summary === "object"
+  ) {
+    return obj;
+  }
+
+  // Search one level deep
+  for (const nested of Object.values(obj)) {
+    if (nested && typeof nested === "object") {
+      const found = findRouteObject(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+function parseRouteData(raw: Record<string, unknown>): RouteData {
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return 0;
+  };
+
+  const itinerary = Array.isArray(raw.itinerary)
+    ? raw.itinerary
+        .filter(
+          (d): d is Record<string, unknown> => !!d && typeof d === "object",
+        )
+        .map((d) => ({
+          day: typeof d.day === "number" ? d.day : 1,
+          transit_advice:
+            typeof d.transit_advice === "string" ? d.transit_advice : null,
+          route: Array.isArray(d.route)
+            ? d.route.map((r: Record<string, unknown>) => ({
+                type: (r.type as "start" | "place" | "hotel") || "place",
+                name: (r.name as string) || "",
+                lat: toNum(r.lat ?? r.latitude),
+                lng: toNum(r.lng ?? r.longitude),
+                pg_place_id: r.pg_place_id as number | undefined,
+                hotel_id: r.hotel_id as string | undefined,
+                category: r.category as string | undefined,
+              }))
+            : [],
+          daily_distance_km: toNum(d.daily_distance_km),
+          daily_duration_mins: toNum(d.daily_duration_mins),
+          geometry:
+            d.geometry && typeof d.geometry === "object"
+              ? (d.geometry as {
+                  type: string;
+                  coordinates: [number, number][];
+                })
+              : null,
+        }))
+    : [];
+
+  const summary =
+    raw.summary && typeof raw.summary === "object"
+      ? (raw.summary as Record<string, unknown>)
+      : {};
+
+  const hotels_used = Array.isArray(summary.hotels_used)
+    ? summary.hotels_used.map((h: Record<string, unknown>) => ({
+        name: (h.name as string) || "",
+        nights: typeof h.nights === "number" ? h.nights : 1,
+      }))
+    : [];
+
+  return {
+    itinerary,
+    summary: {
+      total_driving_distance_km: toNum(summary.total_driving_distance_km),
+      total_driving_duration_mins: toNum(summary.total_driving_duration_mins),
+      hotels_used,
+    },
   };
 }

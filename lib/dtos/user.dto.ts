@@ -7,12 +7,12 @@ export interface UserProfile {
 }
 
 export interface TravelPreference {
-  id: string; // Assuming UUID or similar
+  id: number;
   name: string;
 }
 
 export interface UpdateUserPreferencesDto {
-  preferenceIds: string[];
+  preferenceIds: number[];
 }
 
 export interface RecommendationPreferences {

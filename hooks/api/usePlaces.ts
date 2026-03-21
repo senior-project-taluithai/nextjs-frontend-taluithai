@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { placeService } from "@/lib/services/place";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export const usePlaces = () => {
   return useQuery({
@@ -17,9 +18,13 @@ export const usePlace = (id: number) => {
 };
 
 export const useRecommendedPlaces = () => {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ["places", "recommended"],
+    queryKey: ["places", "recommended", user?.id ?? "guest"],
     queryFn: () => placeService.getRecommended(),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 };
 
@@ -44,7 +49,9 @@ export const useBestForSeasonPlaces = () => {
   });
 };
 
-export const useExplorePlaces = (query: import("@/lib/dtos/place.dto").ExplorePlacesQuery) => {
+export const useExplorePlaces = (
+  query: import("@/lib/dtos/place.dto").ExplorePlacesQuery,
+) => {
   return useQuery({
     queryKey: ["places", "explore", query],
     queryFn: () => placeService.explore(query),
@@ -54,9 +61,19 @@ export const useExplorePlaces = (query: import("@/lib/dtos/place.dto").ExplorePl
 export const useAddPlaceReview = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, comment, rating }: { id: number; comment: string; rating: number }) => placeService.addReview(id, comment, rating),
+    mutationFn: ({
+      id,
+      comment,
+      rating,
+    }: {
+      id: number;
+      comment: string;
+      rating: number;
+    }) => placeService.addReview(id, comment, rating),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["places", Number(variables.id)] });
+      queryClient.invalidateQueries({
+        queryKey: ["places", Number(variables.id)],
+      });
     },
   });
 };
