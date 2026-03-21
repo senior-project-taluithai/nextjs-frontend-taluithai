@@ -110,12 +110,36 @@ export interface ItineraryDay {
 }
 
 export interface RouteData {
+  planId?: number;
   itinerary: ItineraryDay[];
   summary: {
     total_driving_distance_km: number;
     total_driving_duration_mins: number;
     hotels_used: { name: string; nights: number }[];
   };
+}
+
+export interface DayGeometry {
+  day: number;
+  geometry: { type: string; coordinates: [number, number][] };
+}
+
+export interface RoutePlanResponse {
+  id: number;
+  destinationProvince: string;
+  numDays: number;
+  dayGeometries: DayGeometry[];
+  routeData: {
+    itinerary: Omit<ItineraryDay, "geometry">[];
+    summary: {
+      total_driving_distance_km: number;
+      total_driving_duration_mins: number;
+      hotels_used: { name: string; nights: number }[];
+    };
+  };
+  totalDistanceKm: number;
+  totalDurationMins: number;
+  createdAt: string;
 }
 
 export interface PlannedDay {
@@ -148,7 +172,10 @@ interface UseAgentChatReturn {
   budgetData: BudgetData | null;
   hotelData: HotelData | null;
   routeData: RouteData | null;
+  routePlanId: number | null;
   setRouteData: (data: RouteData | null) => void;
+  setRoutePlanId: (id: number | null) => void;
+  fetchRoutePlanById: (planId: number) => Promise<RouteData | null>;
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
   updateThreadId: (id: string | null) => void;
@@ -204,7 +231,48 @@ export function useAgentChat(): UseAgentChatReturn {
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
   const [hotelData, setHotelData] = useState<HotelData | null>(null);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
+  const [routePlanId, setRoutePlanIdState] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const fetchRoutePlanById = useCallback(
+    async (planId: number): Promise<RouteData | null> => {
+      try {
+        const BACKEND_URL =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+        const res = await fetch(`${BACKEND_URL}/route-plans/${planId}`);
+        if (!res.ok) return null;
+
+        const data: RoutePlanResponse = await res.json();
+
+        const routeDataFromPlan: RouteData = {
+          planId: data.id,
+          itinerary: data.dayGeometries.map((dg) => ({
+            day: dg.day,
+            transit_advice: null,
+            route: [],
+            daily_distance_km: 0,
+            daily_duration_mins: 0,
+            geometry: dg.geometry,
+          })),
+          summary: data.routeData?.summary || {
+            total_driving_distance_km: data.totalDistanceKm,
+            total_driving_duration_mins: data.totalDurationMins,
+            hotels_used: [],
+          },
+        };
+
+        return routeDataFromPlan;
+      } catch (err) {
+        console.warn("Failed to fetch route plan:", err);
+        return null;
+      }
+    },
+    [],
+  );
+
+  const setRoutePlanId = useCallback((id: number | null) => {
+    setRoutePlanIdState(id);
+  }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -597,7 +665,10 @@ export function useAgentChat(): UseAgentChatReturn {
     budgetData,
     hotelData,
     routeData,
+    routePlanId,
     setRouteData,
+    setRoutePlanId,
+    fetchRoutePlanById,
     sendMessage,
     stop,
     updateThreadId,

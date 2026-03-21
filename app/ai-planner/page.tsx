@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BackgroundMap } from "@/components/ai-planner/background-map";
 import { TripResultPanel } from "@/components/ai-planner/trip-result-panel";
 import { ChatHistorySidebar } from "@/components/ai-planner/chat-history-sidebar";
@@ -37,7 +37,10 @@ function stripJsonBlocks(text: string): string {
   // Remove truncated/unclosed fenced JSON blocks (when LLM hits token limit mid-output)
   cleaned = cleaned.replace(/```(?:json)?\s*\n[\s\S]*$/g, "");
   // Remove standalone large JSON objects/arrays that weren't fenced (starts with { or [ on its own line)
-  cleaned = cleaned.replace(/^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm, "");
+  cleaned = cleaned.replace(
+    /^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm,
+    "",
+  );
   return cleaned.trim();
 }
 
@@ -260,7 +263,10 @@ export default function AIPlannerPage() {
     budgetData,
     hotelData,
     routeData,
+    routePlanId,
     setRouteData,
+    setRoutePlanId,
+    fetchRoutePlanById,
     sendMessage,
     stop,
     updateThreadId,
@@ -312,74 +318,126 @@ export default function AIPlannerPage() {
     }
   }, [tripData]);
 
+  // Debounce ref for route planner
+  const routePlannerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isFetchingRouteRef = useRef(false);
+
   // Auto-call route planner when tripData is available with hotel data from any source
   useEffect(() => {
-    if (!tripData) return;
-
-    // Build hotels from hotelData (agent hotel search) or from routeData agent stops
-    let hotels: { name: string; latitude: number; longitude: number; rating?: number; price_range?: string }[] = [];
-
-    if (hotelData?.hotels?.length) {
-      hotels = hotelData.hotels.map((h) => ({
-        name: h.name,
-        latitude: h.latitude,
-        longitude: h.longitude,
-        rating: h.rating,
-        price_range: h.priceRange,
-      }));
+    // Clear any pending debounce
+    if (routePlannerTimeoutRef.current) {
+      clearTimeout(routePlannerTimeoutRef.current);
     }
 
-    if (hotels.length === 0 && routeData) {
-      for (const day of routeData.itinerary) {
-        for (const stop of day.route) {
-          if (stop.type === "hotel" && stop.lat && stop.lng) {
-            hotels.push({
-              name: stop.name,
-              latitude: stop.lat,
-              longitude: stop.lng,
-            });
+    // Debounce: wait 500ms before calling route planner
+    routePlannerTimeoutRef.current = setTimeout(() => {
+      // Guard: prevent concurrent fetches
+      if (isFetchingRouteRef.current) {
+        console.log("Route planner: already fetching, skipping");
+        return;
+      }
+
+      if (!tripData) return;
+
+      // Build hotels from hotelData (agent hotel search) or from routeData agent stops
+      let hotels: {
+        name: string;
+        latitude: number;
+        longitude: number;
+        rating?: number;
+        price_range?: string;
+      }[] = [];
+
+      if (hotelData?.hotels?.length) {
+        hotels = hotelData.hotels.map((h) => ({
+          name: h.name,
+          latitude: h.latitude,
+          longitude: h.longitude,
+          rating: h.rating,
+          price_range: h.priceRange,
+        }));
+      }
+
+      if (hotels.length === 0 && routeData) {
+        for (const day of routeData.itinerary) {
+          for (const stop of day.route) {
+            if (stop.type === "hotel" && stop.lat && stop.lng) {
+              hotels.push({
+                name: stop.name,
+                latitude: stop.lat,
+                longitude: stop.lng,
+              });
+            }
           }
         }
       }
-    }
 
-    if (hotels.length === 0) return;
+      if (hotels.length === 0) return;
 
-    const places = tripData.days.flatMap((d) =>
-      d.items
-        .filter((i) => i.latitude && i.longitude)
-        .map((i) => ({
-          name: i.name,
-          latitude: i.latitude!,
-          longitude: i.longitude!,
-          pg_place_id: i.pg_place_id,
-          category: i.category,
-        })),
-    );
+      const places = tripData.days.flatMap((d) =>
+        d.items
+          .filter((i) => i.latitude && i.longitude)
+          .map((i) => ({
+            name: i.name,
+            latitude: i.latitude!,
+            longitude: i.longitude!,
+            pg_place_id: i.pg_place_id,
+            category: i.category,
+          })),
+      );
 
-    if (places.length === 0) return;
+      if (places.length === 0) return;
 
-    const BACKEND_URL =
-      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    fetch(`${BACKEND_URL}/route-planner/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        user_location: { latitude: 13.7563, longitude: 100.5018 },
-        destination_province: tripData.province || "",
-        num_days: tripData.days.length,
-        places,
-        shortlisted_hotels: hotels,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setRouteData(data);
+      isFetchingRouteRef.current = true;
+
+      const BACKEND_URL =
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      fetch(`${BACKEND_URL}/route-planner/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          user_location: { latitude: 13.7563, longitude: 100.5018 },
+          destination_province: tripData.province || "",
+          num_days: tripData.days.length,
+          places,
+          shortlisted_hotels: hotels,
+        }),
       })
-      .catch((err) => console.warn("Route planner failed:", err));
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            if (data.planId) {
+              setRoutePlanId(data.planId);
+            }
+            setRouteData(data);
+          }
+        })
+        .catch((err) => console.warn("Route planner failed:", err))
+        .finally(() => {
+          isFetchingRouteRef.current = false;
+        });
+    }, 500);
+
+    return () => {
+      if (routePlannerTimeoutRef.current) {
+        clearTimeout(routePlannerTimeoutRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData, hotelData, routeData]);
+
+  // Load route plan from DB if we have a planId but no routeData
+  useEffect(() => {
+    if (routePlanId && !routeData) {
+      fetchRoutePlanById(routePlanId).then((data) => {
+        if (data) {
+          setRouteData(data);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routePlanId, routeData]);
 
   const handleSubmit = () => {
     if (!text.trim()) return;
@@ -533,28 +591,30 @@ export default function AIPlannerPage() {
   );
 
   // Include hotels on map
-  const hotelMapItems = hotelData?.hotels?.map((h, idx) => ({
-    id: `hotel-${idx}-${h.name}`,
-    name: h.name,
-    category: 'hotel',
-    latitude: h.latitude,
-    longitude: h.longitude,
-    rating: h.rating,
-    thumbnail_url: h.thumbnail,
-    priceRange: h.priceRange,
-    bookingUrl: h.bookingUrl,
-    address: h.address,
-  })) || [];
+  const hotelMapItems =
+    hotelData?.hotels?.map((h, idx) => ({
+      id: `hotel-${idx}-${h.name}`,
+      name: h.name,
+      category: "hotel",
+      latitude: h.latitude,
+      longitude: h.longitude,
+      rating: h.rating,
+      thumbnail_url: h.thumbnail,
+      priceRange: h.priceRange,
+      bookingUrl: h.bookingUrl,
+      address: h.address,
+    })) || [];
 
   const mapItems = [...tripMapItems, ...hotelMapItems];
 
   // Build route geometries for map polylines
-  const routeGeometries = routeData?.itinerary
-    ?.filter((day) => day.geometry?.coordinates?.length)
-    .map((day) => ({
-      day: day.day,
-      coordinates: day.geometry!.coordinates,
-    })) || [];
+  const routeGeometries =
+    routeData?.itinerary
+      ?.filter((day) => day.geometry?.coordinates?.length)
+      .map((day) => ({
+        day: day.day,
+        coordinates: day.geometry!.coordinates,
+      })) || [];
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">

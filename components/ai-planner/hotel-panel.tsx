@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Star,
   MapPin,
@@ -31,11 +31,16 @@ async function getFullBookingUrl(
   location?: string,
 ): Promise<string | null> {
   try {
-    const params = new URLSearchParams({ name: hotelName });
+    const params = new URLSearchParams();
+    params.append("name", hotelName);
     if (location) params.append("location", location);
-    const response = await api.get(`/hotels/lookup?${params.toString()}`);
+    const url = `/hotels/lookup?${params.toString()}`;
+    console.log("[getFullBookingUrl] Calling:", url);
+    const response = await api.get(url);
+    console.log("[getFullBookingUrl] Response:", response.data);
     return response.data.bookingUrl || null;
-  } catch {
+  } catch (err) {
+    console.error("[getFullBookingUrl] Error:", err);
     return null;
   }
 }
@@ -158,6 +163,7 @@ function AmenityBadge({ amenity }: { amenity: string }) {
 
 function HotelCard({ hotel }: { hotel: HotelItem }) {
   const [isLoadingUrl, setIsLoadingUrl] = useState<string | null>(null);
+  const [lookedUpBookingUrl, setLookedUpBookingUrl] = useState<string | null>(null);
   const allImages = [
     ...(hotel.imageUrls || []),
     ...(hotel.thumbnail ? [hotel.thumbnail] : []),
@@ -171,6 +177,32 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
     : 0;
 
   const isShortUrl = (url: string) => url.startsWith("/hotel-");
+
+  const effectiveBookingUrl = hotel.bookingUrl || lookedUpBookingUrl;
+
+  const lookupBookingUrl = async () => {
+    if (lookedUpBookingUrl || isLoadingUrl) return;
+    console.log("[HotelCard] Looking up booking URL for:", hotel.name);
+    setIsLoadingUrl("lookup");
+    try {
+      const url = await getFullBookingUrl(hotel.name);
+      console.log("[HotelCard] Got URL:", url);
+      if (url) {
+        setLookedUpBookingUrl(url);
+      }
+    } catch (err) {
+      console.error("[HotelCard] Lookup failed:", err);
+    } finally {
+      setIsLoadingUrl(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!hotel.bookingUrl && !lookedUpBookingUrl) {
+      lookupBookingUrl();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBookClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
@@ -265,7 +297,7 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
                     <span className="text-sm font-bold text-gray-900">
                       ฿{formatPrice(price.price)}
                     </span>
-                    {price.link && (
+                    {price.link ? (
                       <button
                         onClick={(e) => handleBookClick(e, price.link!)}
                         disabled={isLoadingUrl === price.link}
@@ -280,7 +312,15 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
                           </>
                         )}
                       </button>
-                    )}
+                    ) : effectiveBookingUrl ? (
+                      <button
+                        onClick={(e) => handleBookClick(e, effectiveBookingUrl)}
+                        className="text-[10px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        Book
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -288,21 +328,28 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
           </div>
         )}
 
-        {!hasPrices && hotel.bookingUrl && (
-          <button
-            onClick={(e) => handleBookClick(e, hotel.bookingUrl!)}
-            disabled={isLoadingUrl === hotel.bookingUrl}
-            className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 mb-3"
-          >
-            {isLoadingUrl === hotel.bookingUrl ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                Book Now
-                <ExternalLink className="w-3.5 h-3.5" />
-              </>
-            )}
-          </button>
+        {!hasPrices && (
+          effectiveBookingUrl ? (
+            <button
+              onClick={(e) => handleBookClick(e, effectiveBookingUrl)}
+              className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors mb-3"
+            >
+              Book Now
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={lookupBookingUrl}
+              disabled={isLoadingUrl === "lookup"}
+              className="flex items-center justify-center gap-2 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold rounded-xl transition-colors mb-3"
+            >
+              {isLoadingUrl === "lookup" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>Find Booking URL</>
+              )}
+            </button>
+          )
         )}
 
         {hotel.website &&
