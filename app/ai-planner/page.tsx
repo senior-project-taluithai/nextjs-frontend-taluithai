@@ -312,9 +312,38 @@ export default function AIPlannerPage() {
     }
   }, [tripData]);
 
-  // Auto-call route planner when tripData + hotelData are both available
+  // Auto-call route planner when tripData is available with hotel data from any source
   useEffect(() => {
-    if (!tripData || !hotelData || routeData) return;
+    if (!tripData) return;
+
+    // Build hotels from hotelData (agent hotel search) or from routeData agent stops
+    let hotels: { name: string; latitude: number; longitude: number; rating?: number; price_range?: string }[] = [];
+
+    if (hotelData?.hotels?.length) {
+      hotels = hotelData.hotels.map((h) => ({
+        name: h.name,
+        latitude: h.latitude,
+        longitude: h.longitude,
+        rating: h.rating,
+        price_range: h.priceRange,
+      }));
+    }
+
+    if (hotels.length === 0 && routeData) {
+      for (const day of routeData.itinerary) {
+        for (const stop of day.route) {
+          if (stop.type === "hotel" && stop.lat && stop.lng) {
+            hotels.push({
+              name: stop.name,
+              latitude: stop.lat,
+              longitude: stop.lng,
+            });
+          }
+        }
+      }
+    }
+
+    if (hotels.length === 0) return;
 
     const places = tripData.days.flatMap((d) =>
       d.items
@@ -328,15 +357,7 @@ export default function AIPlannerPage() {
         })),
     );
 
-    const hotels = hotelData.hotels.map((h) => ({
-      name: h.name,
-      latitude: h.latitude,
-      longitude: h.longitude,
-      rating: h.rating,
-      price_range: h.priceRange,
-    }));
-
-    if (places.length === 0 || hotels.length === 0) return;
+    if (places.length === 0) return;
 
     const BACKEND_URL =
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -358,7 +379,7 @@ export default function AIPlannerPage() {
       })
       .catch((err) => console.warn("Route planner failed:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripData, hotelData]);
+  }, [tripData, hotelData, routeData]);
 
   const handleSubmit = () => {
     if (!text.trim()) return;
