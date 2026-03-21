@@ -14,6 +14,7 @@ const BACKEND_URL =
  *   event: done        — stream complete
  *
  * Request body: { messages: [{role, content}], threadId?: string }
+ * Request headers: Authorization: Bearer <token>
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -22,12 +23,24 @@ export async function POST(req: NextRequest) {
     threadId?: string;
   };
 
+  const cookies = req.cookies;
+  const authCookie = cookies.get("Authentication")?.value || "";
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.replace("Bearer ", "") || authCookie;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   // 1. Create or reuse thread
   let threadId = existingThreadId;
   if (!threadId) {
     const threadRes = await fetch(`${BACKEND_URL}/agent/threads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({}),
     });
     if (!threadRes.ok) {
@@ -40,12 +53,14 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Start streaming run — send only the latest user message
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((m) => m.role === "user");
   const streamRes = await fetch(
     `${BACKEND_URL}/agent/threads/${threadId}/runs/stream`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         input: {
           messages: lastUserMessage
@@ -54,7 +69,7 @@ export async function POST(req: NextRequest) {
         },
         assistant_id: "travel_agent",
       }),
-    }
+    },
   );
 
   if (!streamRes.ok || !streamRes.body) {
@@ -107,7 +122,9 @@ export async function POST(req: NextRequest) {
                 // and produce garbled interleaved text when tools run in parallel
                 if (data.event === "on_chat_model_stream") {
                   const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isInsideTool = tags.some((t: string) => t === "graph:step:tools");
+                  const isInsideTool = tags.some(
+                    (t: string) => t === "graph:step:tools",
+                  );
                   if (isInsideTool) {
                     // Skip text from inside sub-agent tool execution
                     continue;
@@ -124,15 +141,22 @@ export async function POST(req: NextRequest) {
                 // to show which agent is working (supervisor, recommend_agent, etc.)
                 if (data.event === "on_chain_start") {
                   const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) => t.startsWith("graph:step:"));
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
                   const nodeName = data.name as string;
-                  if (isGraphStep && nodeName && !nodeName.startsWith("__") && nodeName !== "LangGraph") {
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
                     controller.enqueue(
                       sse("tool_start", {
                         name: nodeName,
                         input: {},
                         runId: data?.run_id || "",
-                      })
+                      }),
                     );
                   }
                 }
@@ -140,15 +164,22 @@ export async function POST(req: NextRequest) {
                 // Graph node finished
                 if (data.event === "on_chain_end") {
                   const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) => t.startsWith("graph:step:"));
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
                   const nodeName = data.name as string;
-                  if (isGraphStep && nodeName && !nodeName.startsWith("__") && nodeName !== "LangGraph") {
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
                     controller.enqueue(
                       sse("tool_end", {
                         name: nodeName,
                         output: null,
                         runId: data?.run_id || "",
-                      })
+                      }),
                     );
                   }
                 }
@@ -159,9 +190,10 @@ export async function POST(req: NextRequest) {
                   controller.enqueue(
                     sse("tool_start", {
                       name: toolName,
-                      input: data?.data?.input?.kwargs || data?.data?.input || {},
+                      input:
+                        data?.data?.input?.kwargs || data?.data?.input || {},
                       runId: data?.run_id || "",
-                    })
+                    }),
                   );
                 }
                 if (data.event === "on_tool_end") {
@@ -171,7 +203,7 @@ export async function POST(req: NextRequest) {
                       name: toolName,
                       output: null,
                       runId: data?.run_id || "",
-                    })
+                    }),
                   );
                 }
               }
@@ -190,7 +222,7 @@ export async function POST(req: NextRequest) {
           sse("meta", {
             threadId,
             messages: extractMessages(valuesState),
-          })
+          }),
         );
         controller.enqueue(sse("done", {}));
         controller.close();
@@ -211,16 +243,38 @@ export async function POST(req: NextRequest) {
 
 /** Extract simple messages from the final values state */
 function extractMessages(
-  state: Record<string, unknown> | null
+  state: Record<string, unknown> | null,
 ): { role: string; content: string }[] {
   if (!state || !Array.isArray(state.messages)) return [];
+
   return state.messages
+    .map((m: any) => {
+      // Handle standard basic objects
+      if (m.type === "human")
+        return {
+          role: "user",
+          content: typeof m.content === "string" ? m.content : "",
+        };
+      if (m.type === "ai")
+        return {
+          role: "assistant",
+          content: typeof m.content === "string" ? m.content : "",
+        };
+
+      // Handle serialized LangChain messages
+      if (m.type === "constructor" && m.id && Array.isArray(m.id)) {
+        const typeStr = m.id.join(".");
+        if (typeStr.includes("HumanMessage")) {
+          return { role: "user", content: m.kwargs?.content || "" };
+        }
+        if (typeStr.includes("AIMessage")) {
+          return { role: "assistant", content: m.kwargs?.content || "" };
+        }
+      }
+      return null;
+    })
     .filter(
-      (m: Record<string, unknown>) =>
-        (m.type === "human" || m.type === "ai") && typeof m.content === "string"
-    )
-    .map((m: Record<string, unknown>) => ({
-      role: m.type === "human" ? "user" : "assistant",
-      content: m.content as string,
-    }));
+      (m): m is { role: string; content: string } =>
+        m !== null && m.content !== "",
+    );
 }

@@ -212,7 +212,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const logoutMutation = useLogoutMutation()
   const router = useRouter()
   const pathname = usePathname()
-  const { state: sidebarState } = useSidebar()
+  const { state: sidebarState, setOpen, openMobile, setOpenMobile, isMobile, toggleSidebar } = useSidebar()
   const collapsed = sidebarState === "collapsed"
 
   const isAIPlannerActive = pathname.startsWith("/ai-planner")
@@ -226,13 +226,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setIsMounted(true)
   }, [])
 
+  React.useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }, [isMobile, setOpenMobile])
+
   if (!isMounted) {
     return null
   }
 
   return (
     <Sidebar
-      collapsible="icon"
+      collapsible="offcanvas"
       {...props}
       className="!bg-[#0f1923] !border-r-0 overflow-hidden"
       style={{ "--sidebar": "#0f1923" } as React.CSSProperties}

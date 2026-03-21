@@ -6,7 +6,8 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { AuthProvider } from "@/components/providers/AuthProvider"
 import { RouteGuard } from "@/components/providers/RouteGuard"
 import { Toaster } from "@/components/ui/sonner"
-import QueryProvider from "@/components/providers/QueryProvider";
+import QueryProvider from "@/components/providers/QueryProvider"
+import { MobileMenuButton } from "@/components/mobile-menu-button"
 
 
 const geistSans = Geist({
@@ -39,6 +40,7 @@ export default function RootLayout({
             <RouteGuard>
               <SidebarProvider>
                 <AppSidebar />
+                <MobileMenuButton />
                 <main className="w-full relative overflow-x-hidden">
                   {children}
                 </main>

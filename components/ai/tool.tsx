@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import type { ToolUIPart } from "ai"
+import type { ToolUIPart } from "ai";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -8,32 +8,45 @@ import {
   ClockIcon,
   WrenchIcon,
   XCircleIcon,
-} from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
-import { isValidElement } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { cn } from "@/lib/utils"
+} from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
+import { isValidElement } from "react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
-function CodeBlock({ code, language: _language }: { code: string; language?: string }) {
+function CodeBlock({
+  code,
+  language: _language,
+}: {
+  code: string;
+  language?: string;
+}) {
   return (
     <pre className="overflow-x-auto p-3 text-xs leading-relaxed">
       <code>{code}</code>
     </pre>
-  )
+  );
 }
 
-export type ToolProps = ComponentProps<typeof Collapsible>
+export type ToolProps = ComponentProps<typeof Collapsible>;
 
 export const Tool = ({ className, ...props }: ToolProps) => (
-  <Collapsible className={cn("not-prose mb-4 w-full rounded-md border", className)} {...props} />
-)
+  <Collapsible
+    className={cn("not-prose mb-4 w-full rounded-md border", className)}
+    {...props}
+  />
+);
 
 export interface ToolHeaderProps {
-  title?: string
-  type: ToolUIPart["type"]
-  state: ToolUIPart["state"]
-  className?: string
+  title?: string;
+  type: ToolUIPart["type"];
+  state: ToolUIPart["state"];
+  className?: string;
 }
 
 const getStatusBadge = (status: ToolUIPart["state"]) => {
@@ -45,7 +58,7 @@ const getStatusBadge = (status: ToolUIPart["state"]) => {
     "output-available": "Completed",
     "output-error": "Error",
     "output-denied": "Denied",
-  }
+  };
 
   const icons: Record<ToolUIPart["state"], ReactNode> = {
     "input-streaming": <CircleIcon className="size-4" />,
@@ -55,31 +68,42 @@ const getStatusBadge = (status: ToolUIPart["state"]) => {
     "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
     "output-error": <XCircleIcon className="size-4 text-red-600" />,
     "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
-  }
+  };
 
   return (
     <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
       {icons[status]}
       {labels[status]}
     </Badge>
-  )
-}
+  );
+};
 
-export const ToolHeader = ({ className, title, type, state, ...props }: ToolHeaderProps) => (
+export const ToolHeader = ({
+  className,
+  title,
+  type,
+  state,
+  ...props
+}: ToolHeaderProps) => (
   <CollapsibleTrigger
-    className={cn("flex w-full items-center justify-between gap-4 p-3", className)}
+    className={cn(
+      "flex w-full items-center justify-between gap-4 p-3",
+      className,
+    )}
     {...props}
   >
     <div className="flex items-center gap-2">
       <WrenchIcon className="size-4 text-muted-foreground" />
-      <span className="font-medium text-sm">{title ?? type.split("-").slice(1).join("-")}</span>
+      <span className="font-medium text-sm">
+        {title ?? type.split("-").slice(1).join("-")}
+      </span>
       {getStatusBadge(state)}
     </div>
     <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
   </CollapsibleTrigger>
-)
+);
 
-export type ToolContentProps = ComponentProps<typeof CollapsibleContent>
+export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
 
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
@@ -89,39 +113,91 @@ export const ToolContent = ({ className, ...props }: ToolContentProps) => (
     )}
     {...props}
   />
-)
+);
 
 export type ToolInputProps = ComponentProps<"div"> & {
-  input: ToolUIPart["input"]
-}
+  input: ToolUIPart["input"];
+  toolName?: string;
+};
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-2 overflow-hidden p-4", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
-    <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
-    </div>
-  </div>
-)
+export const ToolInput = ({
+  className,
+  input,
+  toolName,
+  ...props
+}: ToolInputProps) => {
+  const isWebSearch =
+    toolName === "webSearch" ||
+    toolName === "searchPlacesSemantic" ||
+    toolName === "searchPlacesByKeyword";
 
-export type ToolOutputProps = ComponentProps<"div"> & {
-  output: unknown
-  errorText?: string
-}
+  if (
+    isWebSearch &&
+    typeof input === "object" &&
+    input !== null &&
+    !Array.isArray(input)
+  ) {
+    const inputObj = input as Record<string, unknown>;
+    const query =
+      (inputObj.query as string) || (inputObj.search_query as string) || "";
 
-export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutputProps) => {
-  if (!(output || errorText)) {
-    return null
+    if (query) {
+      return (
+        <div
+          className={cn("space-y-2 overflow-hidden p-4", className)}
+          {...props}
+        >
+          <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            กำลังค้นหา
+          </h4>
+          <div className="rounded-md bg-muted/50 p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🔍</span>
+              <span className="text-sm font-medium text-foreground">
+                {query}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
-  let Output = <div>{output as ReactNode}</div>
+  return (
+    <div className={cn("space-y-2 overflow-hidden p-4", className)} {...props}>
+      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        Parameters
+      </h4>
+      <div className="rounded-md bg-muted/50">
+        <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+      </div>
+    </div>
+  );
+};
+
+export type ToolOutputProps = ComponentProps<"div"> & {
+  output: unknown;
+  errorText?: string;
+};
+
+export const ToolOutput = ({
+  className,
+  output,
+  errorText,
+  ...props
+}: ToolOutputProps) => {
+  if (!(output || errorText)) {
+    return null;
+  }
+
+  let Output = <div>{output as ReactNode}</div>;
 
   if (typeof output === "object" && !isValidElement(output)) {
-    Output = <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+    Output = (
+      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+    );
   } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />
+    Output = <CodeBlock code={output} language="json" />;
   }
 
   return (
@@ -132,22 +208,28 @@ export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutpu
       <div
         className={cn(
           "overflow-x-auto rounded-md text-xs [&_table]:w-full",
-          errorText ? "bg-destructive/10 text-destructive" : "bg-muted/50 text-foreground",
+          errorText
+            ? "bg-destructive/10 text-destructive"
+            : "bg-muted/50 text-foreground",
         )}
       >
         {errorText && <div>{errorText}</div>}
         {Output}
       </div>
     </div>
-  )
-}
+  );
+};
 
 /** Demo component for preview */
 export default function ToolDemo() {
   return (
     <div className="w-full max-w-2xl p-6">
       <Tool defaultOpen>
-        <ToolHeader title="Weather Lookup" type="tool-invocation" state="output-available" />
+        <ToolHeader
+          title="Weather Lookup"
+          type="tool-invocation"
+          state="output-available"
+        />
         <ToolContent>
           <ToolInput
             input={{
@@ -167,5 +249,5 @@ export default function ToolDemo() {
         </ToolContent>
       </Tool>
     </div>
-  )
+  );
 }

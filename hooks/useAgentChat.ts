@@ -33,6 +33,91 @@ export interface PlannedTrip {
   };
 }
 
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  color: string;
+  allocated: number;
+  spent: number;
+}
+
+export interface DailyBudget {
+  day: number;
+  allocated: number;
+  spent: number;
+}
+
+export interface BudgetExpense {
+  id: string;
+  name: string;
+  amount: number;
+  categoryId: string;
+  day: number;
+  note?: string;
+}
+
+export interface BudgetData {
+  total: number;
+  suggested_spent?: number;
+  categories: BudgetCategory[];
+  dailyBudgets?: DailyBudget[];
+  expenses?: BudgetExpense[];
+}
+
+export interface HotelPrice {
+  provider: string;
+  price: number;
+  link: string;
+}
+
+export interface HotelItem {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  rating: number;
+  reviewCount: number;
+  priceRange: string;
+  thumbnail: string;
+  website: string;
+  bookingUrl: string;
+  prices: HotelPrice[];
+  imageUrls: string[];
+  amenities: string[];
+}
+
+export interface HotelData {
+  hotels: HotelItem[];
+}
+
+export interface RouteStop {
+  type: "start" | "place" | "hotel";
+  name: string;
+  lat: number;
+  lng: number;
+  pg_place_id?: number;
+  hotel_id?: string;
+  category?: string;
+}
+
+export interface ItineraryDay {
+  day: number;
+  transit_advice: string | null;
+  route: RouteStop[];
+  daily_distance_km: number;
+  daily_duration_mins: number;
+  geometry: { type: string; coordinates: [number, number][] } | null;
+}
+
+export interface RouteData {
+  itinerary: ItineraryDay[];
+  summary: {
+    total_driving_distance_km: number;
+    total_driving_duration_mins: number;
+    hotels_used: { name: string; nights: number }[];
+  };
+}
+
 export interface PlannedDay {
   day: number;
   items: PlannedDayItem[];
@@ -41,13 +126,14 @@ export interface PlannedDay {
 export interface PlannedDayItem {
   id?: string;
   name: string;
-  type: string;
+  type: "place" | "event";
   latitude?: number;
   longitude?: number;
   startTime?: string;
   endTime?: string;
   raw_id?: number;
   pg_place_id?: number;
+  event_id?: number;
   thumbnail_url?: string;
   rating?: number;
   category?: string;
@@ -59,8 +145,15 @@ interface UseAgentChatReturn {
   isStreaming: boolean;
   threadId: string | null;
   tripData: PlannedTrip | null;
+  budgetData: BudgetData | null;
+  hotelData: HotelData | null;
+  routeData: RouteData | null;
+  setRouteData: (data: RouteData | null) => void;
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
+  updateThreadId: (id: string | null) => void;
+  loadConversation: (messages: ChatMessage[], threadId: string | null) => void;
+  reset: () => void;
 }
 
 let messageCounter = 0;
@@ -73,7 +166,7 @@ function genId() {
  */
 async function parseSSE(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  handler: (event: string, data: string) => void
+  handler: (event: string, data: string) => void,
 ) {
   const decoder = new TextDecoder();
   let buffer = "";
@@ -106,8 +199,11 @@ async function parseSSE(
 export function useAgentChat(): UseAgentChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadId, setThreadIdState] = useState<string | null>(null);
   const [tripData, setTripData] = useState<PlannedTrip | null>(null);
+  const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const [hotelData, setHotelData] = useState<HotelData | null>(null);
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -120,9 +216,18 @@ export function useAgentChat(): UseAgentChatReturn {
     async (content: string) => {
       if (!content.trim() || isStreaming) return;
 
-      const userMsg: ChatMessage = { id: genId(), role: "user", content: content.trim() };
+      const userMsg: ChatMessage = {
+        id: genId(),
+        role: "user",
+        content: content.trim(),
+      };
       const assistantMsgId = genId();
-      const assistantMsg: ChatMessage = { id: assistantMsgId, role: "assistant", content: "", toolCalls: [] };
+      const assistantMsg: ChatMessage = {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+      };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
@@ -162,89 +267,252 @@ export function useAgentChat(): UseAgentChatReturn {
         // Only send the new message — the backend checkpointer handles history
         const newMessage = { role: "user" as const, content: userContent };
 
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: [newMessage], threadId }),
-          signal: controller.signal,
-        });
+        const BACKEND_URL =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+        // 1. Create or reuse thread
+        let currentThreadId = threadId;
+        if (!currentThreadId) {
+          const threadRes = await fetch(`${BACKEND_URL}/agent/threads`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+          });
+          if (!threadRes.ok) {
+            throw new Error("Failed to create thread: " + threadRes.status);
+          }
+          const threadData = await threadRes.json();
+          currentThreadId = threadData.thread_id;
+          setThreadIdState(currentThreadId);
+        }
+
+        // 2. Stream response
+        const res = await fetch(
+          `${BACKEND_URL}/agent/threads/${currentThreadId}/runs/stream`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              input: { messages: [newMessage] },
+              assistant_id: "travel_agent",
+            }),
+            signal: controller.signal,
+          },
+        );
 
         if (!res.ok || !res.body) {
           throw new Error("Chat request failed: " + res.status);
         }
 
+        // Parse SSE from backend (LangGraph raw events)
         const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        await parseSSE(reader, (event, dataStr) => {
-          try {
-            const data = JSON.parse(dataStr);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            switch (event) {
-              case "text": {
-                fullText += data.content || "";
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId ? { ...m, content: fullText, toolCalls: [...toolCalls] } : m
-                  )
-                );
-                break;
-              }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-              case "tool_start": {
-                const tc: ToolCall = {
-                  id: data.runId || genId(),
-                  name: data.name || "tool",
-                  state: "running",
-                  input: data.input,
-                };
-                toolCalls.push(tc);
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId ? { ...m, content: fullText, toolCalls: [...toolCalls] } : m
-                  )
-                );
-                break;
-              }
+          let currentEventType = "";
 
-              case "tool_end": {
-                const existing = toolCalls.find(
-                  (t) => t.name === data.name && t.state === "running"
-                );
-                if (existing) {
-                  existing.state = "completed";
-                  existing.output = data.output;
-                } else {
-                  toolCalls.push({
-                    id: data.runId || genId(),
-                    name: data.name || "tool",
-                    state: "completed",
-                    output: data.output,
-                  });
-                }
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId ? { ...m, content: fullText, toolCalls: [...toolCalls] } : m
-                  )
-                );
-                break;
-              }
-
-              case "meta": {
-                if (data.threadId) {
-                  setThreadId(data.threadId);
-                }
-                break;
-              }
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              currentEventType = line.slice(7).trim();
+              continue;
             }
-          } catch {
-            // skip unparseable
-          }
-        });
 
-        // Try to extract trip data
+            if (!line.startsWith("data: ")) continue;
+            const dataStr = line.slice(6);
+
+            try {
+              const data = JSON.parse(dataStr);
+
+              // Process the final 'values' event — contains complete state from all agents
+              if (currentEventType === "values") {
+                const msgs = Array.isArray(data.messages) ? data.messages : [];
+                const allAiText = msgs
+                  .filter(
+                    (m: Record<string, unknown>) =>
+                      m.type === "ai" &&
+                      typeof m.content === "string" &&
+                      m.content,
+                  )
+                  .map((m: Record<string, unknown>) => m.content as string)
+                  .join("\n\n");
+
+                if (allAiText) {
+                  const trip = extractTripFromMarkdown(allAiText);
+                  if (trip) setTripData(trip);
+                  const budget = extractBudgetFromMarkdown(allAiText);
+                  if (budget) setBudgetData(budget);
+                  const hotel = extractHotelFromMarkdown(allAiText);
+                  if (hotel) setHotelData(hotel);
+                  const route = extractRouteFromMarkdown(allAiText);
+                  if (route) setRouteData(route);
+                }
+              }
+
+              if (currentEventType === "events") {
+                // Text chunks from the LLM
+                if (data.event === "on_chat_model_stream") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isInsideTool = tags.some(
+                    (t: string) => t === "graph:step:tools",
+                  );
+                  if (isInsideTool) continue;
+
+                  const chunk = data?.data?.chunk;
+                  const content = chunk?.content ?? chunk?.kwargs?.content;
+                  if (content && typeof content === "string") {
+                    fullText += content;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Graph node started
+                if (data.event === "on_chain_start") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
+                  const nodeName = data.name as string;
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
+                    const tc: ToolCall = {
+                      id: data?.run_id || genId(),
+                      name: nodeName,
+                      state: "running",
+                      input: {},
+                    };
+                    toolCalls.push(tc);
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Graph node finished
+                if (data.event === "on_chain_end") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
+                  const nodeName = data.name as string;
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
+                    const existing = toolCalls.find(
+                      (t) => t.name === nodeName && t.state === "running",
+                    );
+                    if (existing) {
+                      existing.state = "completed";
+                      existing.output = null;
+                    }
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
+                }
+
+                // Tool events
+                if (data.event === "on_tool_start") {
+                  const toolName = data?.name || "tool";
+                  const tc: ToolCall = {
+                    id: data?.run_id || genId(),
+                    name: toolName,
+                    state: "running",
+                    input: data?.data?.input?.kwargs || data?.data?.input || {},
+                  };
+                  toolCalls.push(tc);
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
+                        : m,
+                    ),
+                  );
+                }
+                if (data.event === "on_tool_end") {
+                  const toolName = data?.name || "tool";
+                  const existing = toolCalls.find(
+                    (t) => t.name === toolName && t.state === "running",
+                  );
+                  if (existing) {
+                    existing.state = "completed";
+                    existing.output = data?.data?.output || null;
+                  }
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
+                        : m,
+                    ),
+                  );
+                }
+              }
+            } catch {
+              // Skip unparseable lines
+            }
+          }
+        }
+
+        // Try to extract trip/budget/hotel data from streamed text
         const extracted = extractTripFromMarkdown(fullText);
         if (extracted) {
           setTripData(extracted);
+        }
+
+        const extractedBudget = extractBudgetFromMarkdown(fullText);
+        if (extractedBudget) {
+          setBudgetData(extractedBudget);
+        }
+
+        const extractedHotel = extractHotelFromMarkdown(fullText);
+        if (extractedHotel) {
+          setHotelData(extractedHotel);
+        }
+
+        const extractedRoute = extractRouteFromMarkdown(fullText);
+        if (extractedRoute) {
+          setRouteData(extractedRoute);
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {
@@ -253,9 +521,13 @@ export function useAgentChat(): UseAgentChatReturn {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
-                ? { ...m, content: m.content || "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" }
-                : m
-            )
+                ? {
+                    ...m,
+                    content:
+                      m.content || "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+                  }
+                : m,
+            ),
           );
         }
       } finally {
@@ -263,10 +535,75 @@ export function useAgentChat(): UseAgentChatReturn {
         abortRef.current = null;
       }
     },
-    [isStreaming, threadId, tripData]
+    [isStreaming, threadId, tripData],
   );
 
-  return { messages, isStreaming, threadId, tripData, sendMessage, stop };
+  const updateThreadId = useCallback((id: string | null) => {
+    setThreadIdState(id);
+  }, []);
+
+  const loadConversation = useCallback(
+    (loadedMessages: ChatMessage[], loadedThreadId: string | null) => {
+      setMessages(loadedMessages);
+      setThreadIdState(loadedThreadId);
+      setTripData(null);
+      setBudgetData(null);
+      setHotelData(null);
+      setRouteData(null);
+
+      // Extract trip/budget/hotel data from loaded messages
+      const allText = loadedMessages
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.content)
+        .join("\n\n");
+
+      const extracted = extractTripFromMarkdown(allText);
+      if (extracted) {
+        setTripData(extracted);
+      }
+
+      const extractedBudget = extractBudgetFromMarkdown(allText);
+      if (extractedBudget) {
+        setBudgetData(extractedBudget);
+      }
+
+      const extractedHotel = extractHotelFromMarkdown(allText);
+      if (extractedHotel) {
+        setHotelData(extractedHotel);
+      }
+
+      const extractedRoute = extractRouteFromMarkdown(allText);
+      if (extractedRoute) {
+        setRouteData(extractedRoute);
+      }
+    },
+    [],
+  );
+
+  const reset = useCallback(() => {
+    setMessages([]);
+    setThreadIdState(null);
+    setTripData(null);
+    setBudgetData(null);
+    setHotelData(null);
+    setRouteData(null);
+  }, []);
+
+  return {
+    messages,
+    isStreaming,
+    threadId,
+    tripData,
+    budgetData,
+    hotelData,
+    routeData,
+    setRouteData,
+    sendMessage,
+    stop,
+    updateThreadId,
+    loadConversation,
+    reset,
+  };
 }
 
 /**
@@ -286,7 +623,57 @@ function extractTripFromMarkdown(text: string): PlannedTrip | null {
       // not valid JSON, try next block
     }
   }
-  return null;
+
+  // Fallback: parse itinerary-style markdown (e.g. "วันที่ 1", "09:00")
+  // so frontend can still render a trip when model forgets JSON.
+  return extractTripFromOutline(text);
+}
+
+function extractTripFromOutline(text: string): PlannedTrip | null {
+  const lines = text.split(/\r?\n/);
+  const days: PlannedDay[] = [];
+  let currentDay: PlannedDay | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const dayMatch = line.match(/(?:วันที่|วันที|day)\s*(\d+)/i);
+    if (dayMatch) {
+      currentDay = {
+        day: Number(dayMatch[1]),
+        items: [],
+      };
+      days.push(currentDay);
+      continue;
+    }
+
+    if (!currentDay) continue;
+    if (!/^[-*]\s+/.test(line)) continue;
+
+    const cleaned = line
+      .replace(/^[-*]\s+/, "")
+      .replace(/\*\*/g, "")
+      .trim();
+    if (!cleaned) continue;
+
+    const timeMatch = cleaned.match(/(\d{1,2}:\d{2})/);
+    currentDay.items.push({
+      id: String(Math.random()).slice(2, 11),
+      name: cleaned,
+      type: "place",
+      startTime: timeMatch ? timeMatch[1] : undefined,
+    });
+  }
+
+  if (days.length === 0) return null;
+  if (days.every((d) => d.items.length === 0)) return null;
+
+  return {
+    name: "AI Trip",
+    province: "",
+    days,
+  };
 }
 
 function findTripObject(obj: Record<string, unknown>): PlannedTrip | null {
@@ -311,11 +698,147 @@ function findTripObject(obj: Record<string, unknown>): PlannedTrip | null {
 }
 
 /**
+ * Try to extract budget data from the AI markdown response.
+ * Looks for JSON code blocks with { total, categories } structure.
+ */
+function extractBudgetFromMarkdown(text: string): BudgetData | null {
+  // Try fenced code blocks first
+  const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const budgetObject = findBudgetObject(parsed);
+      if (budgetObject) {
+        return parseBudgetData(budgetObject);
+      }
+    } catch {
+      // not valid JSON, try next block
+    }
+  }
+
+  // Fallback: try to find unfenced JSON with budget keys
+  const unfencedRegex =
+    /\{[\s\S]*?"categories"\s*:\s*\[[\s\S]*?"expenses"\s*:\s*\[[\s\S]*?\]\s*\}/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(unfencedMatch[0]);
+      const budgetObject = findBudgetObject(parsed);
+      if (budgetObject) {
+        return parseBudgetData(budgetObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
+  return null;
+}
+
+function findBudgetObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findBudgetObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const obj = value as Record<string, unknown>;
+  if (typeof obj.total !== "undefined" && Array.isArray(obj.categories)) {
+    return obj;
+  }
+
+  for (const nested of Object.values(obj)) {
+    const found = findBudgetObject(nested);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function parseBudgetData(raw: Record<string, unknown>): BudgetData {
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return 0;
+  };
+
+  const categories = Array.isArray(raw.categories)
+    ? raw.categories
+        .filter(
+          (c): c is Record<string, unknown> => !!c && typeof c === "object",
+        )
+        .map((c, idx) => ({
+          id:
+            (typeof c.id === "string" && c.id.trim()) ||
+            (typeof c.name === "string" &&
+              c.name.trim().toLowerCase().replace(/\s+/g, "-")) ||
+            `category-${idx + 1}`,
+          name:
+            (typeof c.name === "string" && c.name.trim()) ||
+            (typeof c.id === "string" && c.id.trim()) ||
+            `Category ${idx + 1}`,
+          color: (typeof c.color === "string" && c.color.trim()) || "#94a3b8",
+          allocated: toNum(c.allocated),
+          spent: toNum(c.spent),
+        }))
+    : [];
+
+  const expenses = Array.isArray(raw.expenses)
+    ? raw.expenses
+        .filter(
+          (e): e is Record<string, unknown> => !!e && typeof e === "object",
+        )
+        .map((e, idx) => ({
+          id: (typeof e.id === "string" && e.id.trim()) || `exp-${idx + 1}`,
+          name:
+            (typeof e.name === "string" && e.name.trim()) ||
+            `Expense ${idx + 1}`,
+          amount: toNum(e.amount),
+          categoryId:
+            (typeof e.categoryId === "string" && e.categoryId.trim()) ||
+            "other",
+          day: typeof e.day === "number" ? e.day : 1,
+          note: typeof e.note === "string" ? e.note : undefined,
+        }))
+    : [];
+
+  const dailyBudgets = Array.isArray(raw.dailyBudgets)
+    ? raw.dailyBudgets
+        .filter(
+          (d): d is Record<string, unknown> => !!d && typeof d === "object",
+        )
+        .map((d) => ({
+          day: typeof d.day === "number" ? d.day : 1,
+          allocated: toNum(d.allocated),
+          spent: toNum(d.spent),
+        }))
+    : [];
+
+  return {
+    total: toNum(raw.total),
+    suggested_spent: toNum(raw.suggested_spent) || undefined,
+    categories,
+    expenses,
+    dailyBudgets: dailyBudgets.length > 0 ? dailyBudgets : undefined,
+  };
+}
+
+/**
  * Allowed image hostnames — only trust URLs from our own data sources.
  */
 const ALLOWED_IMAGE_HOSTNAMES = new Set([
   "lh3.googleusercontent.com",
   "streetviewpixels-pa.googleapis.com",
+  "tatapi.tourismthailand.org",
+  "www.tourismthailand.org",
   "images.unsplash.com",
   "picsum.photos",
   "fastly.picsum.photos",
@@ -335,6 +858,23 @@ function sanitizeThumbnailUrl(url: unknown): string | undefined {
 }
 
 function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
+  const toNum = (v: unknown): number | undefined => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  };
+
+  const toStr = (v: unknown): string | undefined => {
+    if (typeof v === "string") {
+      const s = v.trim();
+      return s ? s : undefined;
+    }
+    return undefined;
+  };
+
   const days = parsed.days as Record<string, unknown>[];
   return {
     name: (parsed.name as string) || (parsed.tripName as string) || "AI Trip",
@@ -342,21 +882,307 @@ function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
     days: days.map((d, idx) => ({
       day: (d.day as number) || idx + 1,
       items: Array.isArray(d.items)
-        ? d.items.map((item: Record<string, unknown>) => ({
-            id: String(Math.random()).slice(2, 11),
-            name: (item.name as string) || "",
-            type: (item.type as string) || "place",
-            latitude: item.latitude as number | undefined,
-            longitude: item.longitude as number | undefined,
-            startTime: item.startTime as string | undefined,
-            endTime: item.endTime as string | undefined,
-            pg_place_id: item.pg_place_id as number | undefined,
-            rating: item.rating as number | undefined,
-            category: item.category as string | undefined,
-            thumbnail_url: sanitizeThumbnailUrl(item.thumbnail_url),
-          }))
+        ? d.items.map((item: Record<string, unknown>) => {
+            const rawType = toStr(item.type) || toStr(item.category) || "place";
+            const type: "place" | "event" =
+              rawType === "event" ? "event" : "place";
+            return {
+              id: String(Math.random()).slice(2, 11),
+              name:
+                toStr(item.name) ||
+                toStr(item.title) ||
+                toStr(item.place_name) ||
+                toStr(item.poi_name) ||
+                toStr(item.category) ||
+                toStr(item.type) ||
+                "",
+              type,
+              latitude: toNum(item.latitude) ?? toNum(item.lat),
+              longitude:
+                toNum(item.longitude) ?? toNum(item.lng) ?? toNum(item.lon),
+              startTime:
+                toStr(item.startTime) ||
+                toStr(item.start_time) ||
+                toStr(item.time),
+              endTime: toStr(item.endTime) || toStr(item.end_time),
+              pg_place_id:
+                type === "place"
+                  ? (toNum(item.pg_place_id) ?? toNum(item.raw_id))
+                  : undefined,
+              event_id:
+                type === "event"
+                  ? (toNum(item.event_id) ?? toNum(item.raw_id))
+                  : undefined,
+              rating: toNum(item.rating) ?? toNum(item.review_rating),
+              category: toStr(item.category) || toStr(item.type),
+              address: toStr(item.address),
+              thumbnail_url: sanitizeThumbnailUrl(
+                item.thumbnail_url ?? item.thumbnail,
+              ),
+            };
+          })
         : [],
     })),
     budget: (parsed.budget as PlannedTrip["budget"]) || undefined,
+  };
+}
+
+/**
+ * Try to extract hotel data from the AI markdown response.
+ * Looks for JSON code blocks with { hotels: [...] } structure.
+ */
+function extractHotelFromMarkdown(text: string): HotelData | null {
+  // Try fenced code blocks first
+  const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const hotelObject = findHotelObject(parsed);
+      if (hotelObject) {
+        return parseHotelData(hotelObject);
+      }
+    } catch {
+      // not valid JSON, try next block
+    }
+  }
+
+  // Fallback: try to find unfenced JSON with "hotels" key
+  // This handles cases where JSON is truncated (missing closing ```)
+  const unfencedRegex = /\{[\s\S]*?"hotels"\s*:\s*\[/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      // Find the start of the JSON
+      const startIdx = unfencedMatch.index;
+      // Try to find a reasonable end point - look for }] or ]] or similar
+      const possibleEnds = [
+        text.indexOf("]}", startIdx),
+        text.indexOf('"]', startIdx),
+        text.indexOf("}\n", startIdx),
+      ];
+      let endIdx = -1;
+      for (const idx of possibleEnds) {
+        if (idx !== -1 && idx < startIdx + 50000) {
+          // sanity limit
+          endIdx = idx + 2;
+          break;
+        }
+      }
+
+      if (endIdx === -1) continue;
+
+      const jsonStr = text.slice(startIdx, endIdx + 1);
+      const parsed = JSON.parse(jsonStr);
+      const hotelObject = findHotelObject(parsed);
+      if (hotelObject) {
+        return parseHotelData(hotelObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
+  return null;
+}
+
+function findHotelObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const obj = value as Record<string, unknown>;
+  if (Array.isArray(obj.hotels) && obj.hotels.length > 0) {
+    // Verify at least one item looks like a hotel (has name and latitude/address)
+    const first = obj.hotels[0] as Record<string, unknown>;
+    if (first && typeof first.name === "string") {
+      return obj;
+    }
+  }
+
+  for (const nested of Object.values(obj)) {
+    const found = findHotelObject(nested);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function parseHotelData(raw: Record<string, unknown>): HotelData {
+  const hotels = Array.isArray(raw.hotels)
+    ? raw.hotels
+        .filter(
+          (h): h is Record<string, unknown> => !!h && typeof h === "object",
+        )
+        .map((h) => ({
+          name: (typeof h.name === "string" && h.name) || "",
+          address: (typeof h.address === "string" && h.address) || "",
+          latitude: typeof h.latitude === "number" ? h.latitude : 0,
+          longitude: typeof h.longitude === "number" ? h.longitude : 0,
+          rating: typeof h.rating === "number" ? h.rating : 0,
+          reviewCount: typeof h.reviewCount === "number" ? h.reviewCount : 0,
+          priceRange: (typeof h.priceRange === "string" && h.priceRange) || "",
+          thumbnail:
+            sanitizeThumbnailUrl(h.thumbnail) ||
+            sanitizeThumbnailUrl(h.thumbnail_url) ||
+            "",
+          website: (typeof h.website === "string" && h.website) || "",
+          bookingUrl: (typeof h.bookingUrl === "string" && h.bookingUrl) || "",
+          prices: Array.isArray(h.prices)
+            ? h.prices
+                .filter(
+                  (p): p is Record<string, unknown> =>
+                    !!p && typeof p === "object",
+                )
+                .map((p) => ({
+                  provider:
+                    (typeof p.provider === "string" && p.provider) || "",
+                  price: typeof p.price === "number" ? p.price : 0,
+                  link: (typeof p.link === "string" && p.link) || "",
+                }))
+            : [],
+          imageUrls: Array.isArray(h.imageUrls)
+            ? h.imageUrls.filter(
+                (url): url is string =>
+                  typeof url === "string" && url.length > 0,
+              )
+            : [],
+          amenities: Array.isArray(h.amenities) ? h.amenities : [],
+        }))
+    : [];
+
+  return { hotels };
+}
+
+/**
+ * Try to extract route data from the AI markdown response.
+ * Looks for JSON code blocks with { itinerary: [...], summary: {...} } structure.
+ */
+function extractRouteFromMarkdown(text: string): RouteData | null {
+  // Try fenced code blocks first
+  const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const routeObject = findRouteObject(parsed);
+      if (routeObject) {
+        return parseRouteData(routeObject);
+      }
+    } catch {
+      // not valid JSON, try next block
+    }
+  }
+
+  // Fallback: try to find unfenced JSON with route keys
+  const unfencedRegex =
+    /\{[\s\S]*?"itinerary"\s*:\s*\[[\s\S]*?"summary"\s*:\s*\{[\s\S]*?}/g;
+  let unfencedMatch;
+  while ((unfencedMatch = unfencedRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(unfencedMatch[0]);
+      const routeObject = findRouteObject(parsed);
+      if (routeObject) {
+        return parseRouteData(routeObject);
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+
+  return null;
+}
+
+function findRouteObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findRouteObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const obj = value as Record<string, unknown>;
+  // Check if this has itinerary array and summary object
+  if (
+    Array.isArray(obj.itinerary) &&
+    obj.summary &&
+    typeof obj.summary === "object"
+  ) {
+    return obj;
+  }
+
+  // Search one level deep
+  for (const nested of Object.values(obj)) {
+    if (nested && typeof nested === "object") {
+      const found = findRouteObject(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+function parseRouteData(raw: Record<string, unknown>): RouteData {
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return 0;
+  };
+
+  const itinerary = Array.isArray(raw.itinerary)
+    ? raw.itinerary
+        .filter(
+          (d): d is Record<string, unknown> => !!d && typeof d === "object",
+        )
+        .map((d) => ({
+          day: typeof d.day === "number" ? d.day : 1,
+          transit_advice:
+            typeof d.transit_advice === "string" ? d.transit_advice : null,
+          route: Array.isArray(d.route)
+            ? d.route.map((r: Record<string, unknown>) => ({
+                type: (r.type as "start" | "place" | "hotel") || "place",
+                name: (r.name as string) || "",
+                lat: toNum(r.lat ?? r.latitude),
+                lng: toNum(r.lng ?? r.longitude),
+                pg_place_id: r.pg_place_id as number | undefined,
+                hotel_id: r.hotel_id as string | undefined,
+                category: r.category as string | undefined,
+              }))
+            : [],
+          daily_distance_km: toNum(d.daily_distance_km),
+          daily_duration_mins: toNum(d.daily_duration_mins),
+          geometry:
+            d.geometry && typeof d.geometry === "object"
+              ? (d.geometry as {
+                  type: string;
+                  coordinates: [number, number][];
+                })
+              : null,
+        }))
+    : [];
+
+  const summary =
+    raw.summary && typeof raw.summary === "object"
+      ? (raw.summary as Record<string, unknown>)
+      : {};
+
+  const hotels_used = Array.isArray(summary.hotels_used)
+    ? summary.hotels_used.map((h: Record<string, unknown>) => ({
+        name: (h.name as string) || "",
+        nights: typeof h.nights === "number" ? h.nights : 1,
+      }))
+    : [];
+
+  return {
+    itinerary,
+    summary: {
+      total_driving_distance_km: toNum(summary.total_driving_distance_km),
+      total_driving_duration_mins: toNum(summary.total_driving_duration_mins),
+      hotels_used,
+    },
   };
 }

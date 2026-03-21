@@ -8,7 +8,9 @@ export interface Place {
   latitude: number;
   longitude: number;
   best_season: string; // 'all_year' | 'winter' | 'summer' | 'rainy' ? - Keeping string for now
-  rating: number;
+  rating: number; // Google Maps rating
+  user_rating: number; // Website user rating
+  user_rating_count: number; // Count of website user reviews
   thumbnail_url: string;
   image_urls: string[];
   categories: string[];
@@ -26,5 +28,5 @@ export interface ExplorePlacesQuery {
   page?: number;
   limit?: number;
   orderField?: string;
-  orderDir?: 'ASC' | 'DESC';
+  orderDir?: "ASC" | "DESC";
 }

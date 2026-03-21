@@ -43,3 +43,8 @@ next-env.d.ts
 # GCP Service Account keys
 vertex-sa-key.json
 *-sa-key.json
+
+AGENTS.md
+.github
+
+CLAUDE.md

@@ -16,7 +16,9 @@ export const useUpcomingEvents = () => {
   });
 };
 
-export const useExploreEvents = (query: import("@/lib/dtos/event.dto").ExploreEventsQuery) => {
+export const useExploreEvents = (
+  query: import("@/lib/dtos/event.dto").ExploreEventsQuery,
+) => {
   return useQuery({
     queryKey: ["events", "explore", query],
     queryFn: () => eventService.explore(query),
@@ -44,9 +46,26 @@ export const useCreateEventMutation = () => {
 export const useAddEventReview = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, comment, rating }: { id: number; comment: string; rating: number }) => eventService.addReview(id, comment, rating),
+    mutationFn: ({
+      id,
+      comment,
+      rating,
+    }: {
+      id: number;
+      comment: string;
+      rating: number;
+    }) => eventService.addReview(id, comment, rating),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["events", Number(variables.id)] });
+      queryClient.invalidateQueries({
+        queryKey: ["events", Number(variables.id)],
+      });
     },
+  });
+};
+
+export const useMonthEvents = (year: number, month: number) => {
+  return useQuery({
+    queryKey: ["events", "month", year, month],
+    queryFn: () => eventService.getEventsByMonth(year, month),
   });
 };
