@@ -307,8 +307,10 @@ export function useAgentChat(): UseAgentChatReturn {
       const toolCalls: ToolCall[] = [];
 
       try {
-        // If trip data exists, include it as context for modification requests
+        // Pass existing data as context so the agent can modify rather than recreate
         let userContent = content.trim();
+        const contextBlocks: string[] = [];
+
         if (tripData) {
           const tripContext = JSON.stringify({
             name: tripData.name,
@@ -329,7 +331,43 @@ export function useAgentChat(): UseAgentChatReturn {
               })),
             })),
           });
-          userContent = `[CURRENT_TRIP]\n\`\`\`json\n${tripContext}\n\`\`\`\n\n[USER_REQUEST]\n${content.trim()}`;
+          contextBlocks.push(
+            `[CURRENT_TRIP]\n\`\`\`json\n${tripContext}\n\`\`\``,
+          );
+        }
+
+        if (budgetData) {
+          const budgetContext = JSON.stringify({
+            total: budgetData.total,
+            suggested_spent: budgetData.suggested_spent,
+            categories: budgetData.categories,
+            dailyBudgets: budgetData.dailyBudgets,
+            expenses: budgetData.expenses,
+          });
+          contextBlocks.push(
+            `[CURRENT_BUDGET]\n\`\`\`json\n${budgetContext}\n\`\`\``,
+          );
+        }
+
+        if (hotelData) {
+          const hotelContext = JSON.stringify({
+            hotels: hotelData.hotels.map((h) => ({
+              name: h.name,
+              address: h.address,
+              latitude: h.latitude,
+              longitude: h.longitude,
+              rating: h.rating,
+              priceRange: h.priceRange,
+              amenities: h.amenities,
+            })),
+          });
+          contextBlocks.push(
+            `[CURRENT_HOTELS]\n\`\`\`json\n${hotelContext}\n\`\`\``,
+          );
+        }
+
+        if (contextBlocks.length > 0) {
+          userContent = `${contextBlocks.join("\n\n")}\n\n[USER_REQUEST]\n${content.trim()}`;
         }
 
         // Only send the new message — the backend checkpointer handles history
@@ -377,6 +415,7 @@ export function useAgentChat(): UseAgentChatReturn {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let currentEventType = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -385,8 +424,6 @@ export function useAgentChat(): UseAgentChatReturn {
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
-
-          let currentEventType = "";
 
           for (const line of lines) {
             if (line.startsWith("event: ")) {
@@ -422,6 +459,22 @@ export function useAgentChat(): UseAgentChatReturn {
                   if (hotel) setHotelData(hotel);
                   const route = extractRouteFromMarkdown(allAiText);
                   if (route) setRouteData(route);
+
+                  // Update chat message with clean text (strip JSON code blocks)
+                  const cleanText = allAiText
+                    .replace(/```(?:json)?\s*\n[\s\S]*?```/g, "")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim();
+                  if (cleanText) {
+                    fullText = cleanText;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? { ...m, content: cleanText }
+                          : m,
+                      ),
+                    );
+                  }
                 }
               }
 
@@ -603,7 +656,7 @@ export function useAgentChat(): UseAgentChatReturn {
         abortRef.current = null;
       }
     },
-    [isStreaming, threadId, tripData],
+    [isStreaming, threadId, tripData, budgetData, hotelData],
   );
 
   const updateThreadId = useCallback((id: string | null) => {

@@ -425,7 +425,7 @@ export default function AIPlannerPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripData, hotelData, routeData]);
+  }, [tripData, hotelData]);
 
   // Load route plan from DB if we have a planId but no routeData
   useEffect(() => {
@@ -740,7 +740,19 @@ export default function AIPlannerPage() {
               </p>
             </div>
           ) : (
-            messages.map((msg) => (
+            messages
+              .filter((msg) => {
+                // Skip non-streaming assistant messages with empty content after JSON stripping
+                if (msg.role !== "assistant") return true;
+                const isCurrentlyStreamingMsg =
+                  isStreaming && msg === messages[messages.length - 1];
+                if (isCurrentlyStreamingMsg) return true;
+                const cleaned = msg.content
+                  ? stripJsonBlocks(msg.content)
+                  : "";
+                return cleaned.trim().length > 0 || (msg.toolCalls && msg.toolCalls.length > 0);
+              })
+              .map((msg) => (
               <div
                 key={msg.id}
                 className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
