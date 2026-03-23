@@ -302,7 +302,11 @@ export default function AIPlannerPage() {
         role: msg.role,
         content: msg.content,
       }));
-      loadConversation(loadedMessages, activeConversation?.threadId || null);
+      void loadConversation(
+        loadedMessages,
+        activeConversation?.threadId || null,
+        activeConversationId || undefined,
+      );
       setIsNewChat(false);
     } else if (!activeConversationId) {
       setIsNewChat(true);
@@ -389,8 +393,6 @@ export default function AIPlannerPage() {
 
       if (places.length === 0) return;
 
-      console.log("[RoutePlanner] Fetching new route plan...");
-
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
       fetch(`${BACKEND_URL}/route-planner/plan`, {
@@ -408,7 +410,6 @@ export default function AIPlannerPage() {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {
-            console.log("[RoutePlanner] Received new route data:", data);
             if (data.planId) {
               setRoutePlanId(data.planId);
             }
@@ -452,11 +453,6 @@ export default function AIPlannerPage() {
         }),
       );
 
-      console.log(
-        "[RoutePlanner] Updating hotel assignments via PATCH:",
-        hotelOverrides,
-      );
-
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
       fetch(`${BACKEND_URL}/route-planner/plan/${routePlanId}/hotels`, {
@@ -470,7 +466,6 @@ export default function AIPlannerPage() {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {
-            console.log("[RoutePlanner] Received updated route data:", data);
             setRouteData(data);
           }
         })
@@ -527,8 +522,6 @@ export default function AIPlannerPage() {
       startDate.setDate(startDate.getDate() + 1);
       const endDate = addDays(startDate, trip.days.length || 1);
 
-      console.log('[DEBUG] Saving trip with budget:', JSON.stringify(budgetData, null, 2));
-
       const newTrip = await createTripMutation.mutateAsync({
         name: trip.name || "My Ai Trip",
         start_date: format(startDate, "yyyy-MM-dd"),
@@ -537,8 +530,6 @@ export default function AIPlannerPage() {
         status: "draft",
         budget: budgetData,
       });
-
-      console.log('[DEBUG] Created trip response:', JSON.stringify(newTrip.budget, null, 2));
 
       const tripId = newTrip.id;
 

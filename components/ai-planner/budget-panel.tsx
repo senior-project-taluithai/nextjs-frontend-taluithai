@@ -173,10 +173,7 @@ export function BudgetPanel({
   daysCount: number;
   onUpdateBudget?: (newData: BudgetData) => void;
 }) {
-  console.log('[DEBUG] BudgetPanel received data:', JSON.stringify(data, null, 2));
   const normalizedData = normalizeBudgetData(data, daysCount);
-  console.log('[DEBUG] BudgetPanel normalizedData:', JSON.stringify(normalizedData, null, 2));
-
 
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [newExpName, setNewExpName] = useState("");

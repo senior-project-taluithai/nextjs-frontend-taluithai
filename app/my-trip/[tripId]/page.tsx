@@ -109,18 +109,6 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     // Load trip data from API
     const { data: trip, isLoading: tripLoading, error: tripError } = useTrip(parseInt(tripId));
 
-    // Debug: Log budget data when trip loads
-    useEffect(() => {
-        if (trip) {
-            console.log('[DEBUG] Loaded trip budget:', JSON.stringify(trip.budget, null, 2));
-            if (trip.budget) {
-                console.log('[DEBUG] budget.total:', trip.budget.total);
-                console.log('[DEBUG] budget.categories:', trip.budget.categories);
-                console.log('[DEBUG] budget.expenses:', trip.budget.expenses);
-            }
-        }
-    }, [trip]);
-
     // Load recommendations
     const { data: recommendedPlaces, isLoading: recommendationsLoading } = useTripRecommendedPlaces(
         parseInt(tripId),

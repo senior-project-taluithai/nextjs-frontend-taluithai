@@ -44,9 +44,7 @@ async function getFullBookingUrl(
     params.append("name", hotelName);
     if (location) params.append("location", location);
     const url = `/hotels/lookup?${params.toString()}`;
-    console.log("[getFullBookingUrl] Calling:", url);
     const response = await api.get(url);
-    console.log("[getFullBookingUrl] Response:", response.data);
     return response.data.bookingUrl || null;
   } catch (err) {
     console.error("[getFullBookingUrl] Error:", err);
@@ -203,11 +201,9 @@ function HotelCard({
 
   const lookupBookingUrl = async () => {
     if (lookedUpBookingUrl || isLoadingUrl) return;
-    console.log("[HotelCard] Looking up booking URL for:", hotel.name);
     setIsLoadingUrl("lookup");
     try {
       const url = await getFullBookingUrl(hotel.name);
-      console.log("[HotelCard] Got URL:", url);
       if (url) {
         setLookedUpBookingUrl(url);
       }

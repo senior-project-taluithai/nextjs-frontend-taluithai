@@ -182,7 +182,11 @@ interface UseAgentChatReturn {
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
   updateThreadId: (id: string | null) => void;
-  loadConversation: (messages: ChatMessage[], threadId: string | null) => void;
+  loadConversation: (
+    messages: ChatMessage[],
+    threadId: string | null,
+    conversationId?: string,
+  ) => Promise<void>;
   reset: () => void;
   onSelectHotel: (index: number) => void;
   onAssignHotel: (night: number, hotelIndex: number) => void;
@@ -725,7 +729,11 @@ export function useAgentChat(): UseAgentChatReturn {
   }, []);
 
   const loadConversation = useCallback(
-    (loadedMessages: ChatMessage[], loadedThreadId: string | null) => {
+    async (
+      loadedMessages: ChatMessage[],
+      loadedThreadId: string | null,
+      conversationId?: string,
+    ) => {
       setMessages(loadedMessages);
       setThreadIdState(loadedThreadId);
       setTripData(null);
@@ -733,7 +741,57 @@ export function useAgentChat(): UseAgentChatReturn {
       setHotelData(null);
       setRouteData(null);
 
-      // Extract trip/budget/hotel data from loaded messages
+      // Try to fetch persisted agent state first
+      if (conversationId || loadedThreadId) {
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+          const stateId = conversationId || loadedThreadId;
+          const stateRes = await fetch(`${BACKEND_URL}/chat/${stateId}/state`, {
+            credentials: "include",
+          });
+
+          if (stateRes.ok) {
+            const state = await stateRes.json();
+
+            // Use persisted state preferentially over markdown parsing
+            if (
+              state?.currentTrip &&
+              Array.isArray(state.currentTrip.days) &&
+              state.currentTrip.days.length > 0
+            ) {
+              setTripData(state.currentTrip);
+            }
+
+            if (
+              state?.currentBudget &&
+              typeof state.currentBudget.total === "number"
+            ) {
+              setBudgetData(state.currentBudget);
+            }
+
+            if (
+              state?.currentHotels &&
+              Array.isArray(state.currentHotels.hotels)
+            ) {
+              setHotelData({ hotels: state.currentHotels.hotels });
+            }
+
+            // If we got persisted state, return early (no need to parse markdown)
+            if (
+              state?.currentTrip ||
+              state?.currentBudget ||
+              state?.currentHotels
+            ) {
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to fetch agent state:", err);
+        }
+      }
+
+      // Fallback: Extract trip/budget/hotel data from loaded messages
       const allText = loadedMessages
         .filter((m) => m.role === "assistant")
         .map((m) => m.content)
