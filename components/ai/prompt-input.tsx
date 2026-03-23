@@ -1272,7 +1272,6 @@ export default function PromptInputDemo() {
       <PromptInput
         multiple
         onSubmit={message => {
-          console.log("Submitting message:", message)
         }}
       >
         <PromptInputAttachments>

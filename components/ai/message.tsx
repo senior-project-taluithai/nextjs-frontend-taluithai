@@ -3,7 +3,7 @@
 import type { FileUIPart, UIMessage } from "ai"
 import { ChevronLeftIcon, ChevronRightIcon, PaperclipIcon, XIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react"
-import { createContext, memo, useContext, useEffect, useState } from "react"
+import { Children, createContext, isValidElement, memo, useContext, useEffect, useState } from "react"
 import { Streamdown } from "streamdown"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
@@ -260,10 +260,55 @@ export const MessageBranchPage = ({ className, ...props }: MessageBranchPageProp
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>
 
+const markdownComponents: NonNullable<MessageResponseProps["components"]> = {
+  p: ({ className, children, ...props }) => {
+    const hasBlockChild = Children.toArray(children).some(child => {
+      if (!isValidElement(child)) {
+        return false
+      }
+
+      if (typeof child.type === "string" && child.type === "div") {
+        return true
+      }
+
+      if (child.props && typeof child.props === "object") {
+        return "data-streamdown" in child.props
+      }
+
+      return false
+    })
+
+    if (hasBlockChild) {
+      return (
+        <div className={className} {...props}>
+          {children}
+        </div>
+      )
+    }
+
+    return (
+      <p className={className} {...props}>
+        {children}
+      </p>
+    )
+  },
+  img: ({ className, alt, ...props }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      alt={alt || ""}
+      className={cn("my-2 h-auto max-w-full rounded-lg", className)}
+      decoding="async"
+      loading="lazy"
+      {...props}
+    />
+  ),
+}
+
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, components, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+      components={{ ...components, ...markdownComponents }}
       {...props}
     />
   ),

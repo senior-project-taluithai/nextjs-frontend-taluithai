@@ -3,6 +3,7 @@ import {
   chatService,
   type ChatConversation,
   type ChatMessage,
+  type AgentStateResponse,
 } from "@/lib/services/chat";
 
 export function useChatConversations(params?: {
@@ -78,5 +79,17 @@ export function useDeleteConversation() {
   });
 }
 
+export function useAgentState(conversationId: string | null) {
+  return useQuery({
+    queryKey: ["chat", "conversations", conversationId, "state"],
+    queryFn: () =>
+      conversationId
+        ? chatService.getAgentState(conversationId)
+        : Promise.resolve(null),
+    enabled: !!conversationId,
+    staleTime: 30000,
+  });
+}
+
 export { chatService };
-export type { ChatConversation, ChatMessage };
+export type { ChatConversation, ChatMessage, AgentStateResponse };

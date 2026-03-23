@@ -8,9 +8,6 @@ import {
   Calendar,
   Star,
   ArrowRight,
-  Search,
-  SlidersHorizontal,
-  X,
   Sparkles,
   TrendingUp,
   Heart,
@@ -39,26 +36,6 @@ import { useRouter } from "next/navigation";
 /* ─── Hero image (reduced to w=1200 since it's displayed in a constrained viewport) ─── */
 const heroImage =
   "https://images.unsplash.com/photo-1768985966166-e8288d5fae8e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1200";
-
-/* ─── Season filter data ─── */
-const seasons = [
-  { id: "cool", label: "Cool Season", months: "Nov – Feb", icon: "❄️", color: "blue" },
-  { id: "hot", label: "Hot Season", months: "Mar – May", icon: "☀️", color: "amber" },
-  { id: "rainy", label: "Rainy Season", months: "Jun – Oct", icon: "🌧️", color: "teal" },
-];
-
-/* ─── Category filter data ─── */
-const categories = [
-  { id: "all", label: "All", icon: "🌏" },
-  { id: "Temple", label: "Temples", icon: "🛕" },
-  { id: "Beach", label: "Beaches", icon: "🏖️" },
-  { id: "Nature", label: "Nature", icon: "🌿" },
-  { id: "Heritage", label: "Heritage", icon: "🏛️" },
-  { id: "Festival", label: "Festivals", icon: "🎆" },
-  { id: "Island", label: "Islands", icon: "🏝️" },
-  { id: "Market", label: "Markets", icon: "🛒" },
-  { id: "Shopping", label: "Shopping", icon: "🛍️" },
-];
 
 /* ─── Helpers ─── */
 function getProvinceName(provinces: Province[], id: number) {
@@ -586,10 +563,7 @@ export default function Home() {
   const { data: hiddenGems = [], isLoading: isLoadingGems } = useHiddenGems();
   const { data: upcomingEvents = [], isLoading: isLoadingEvents } = useUpcomingEvents();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [activeSeason, setActiveSeason] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState("all");
+
 
   // Trending scroll
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -618,9 +592,6 @@ export default function Home() {
           <span className="bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm px-3 py-1.5 rounded-full border border-white/30 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5" />Thailand
           </span>
-          <button className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 hover:bg-white/30 transition-colors">
-            <SlidersHorizontal className="w-4 h-4 text-white" />
-          </button>
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-8 text-center -mt-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
@@ -630,59 +601,11 @@ export default function Home() {
             </h1>
             <p className="text-white/70 text-sm sm:text-base mb-6 max-w-md px-2">Beyond the tourist trail — explore authentic local gems, cultural wonders, and natural paradises.</p>
           </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="w-full max-w-xl px-4 sm:px-0">
-            <div className={`flex items-center gap-3 bg-white rounded-2xl px-3 sm:px-4 py-3 shadow-2xl transition-all duration-200 ${searchFocused ? "ring-2 ring-emerald-400" : ""}`}>
-              <Search className="w-5 h-5 text-gray-400 shrink-0" />
-              <input type="text" placeholder="Search destinations, provinces, or activities..."
-                value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-                className="flex-1 outline-none text-gray-700 placeholder-gray-400 bg-transparent text-sm min-w-0" />
-              {searchQuery && (<button onClick={() => setSearchQuery("")}><X className="w-4 h-4 text-gray-400 hover:text-gray-600" /></button>)}
-              <Link href="/explore" className="bg-emerald-500 text-white px-3 sm:px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors whitespace-nowrap shrink-0">Search</Link>
-            </div>
-          </motion.div>
         </div>
       </div>
 
       {/* ─── Content ─── */}
       <div className="px-4 sm:px-6 lg:px-8 xl:px-12 pb-12 -mt-2 max-w-[1400px] mx-auto">
-        {/* Season Filter */}
-        <div className="flex gap-3 mb-6 pt-4 overflow-x-auto scrollbar-hide">
-          {seasons.map((season) => {
-            const colorMap: Record<string, string> = {
-              blue: activeSeason === season.id ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-200" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300",
-              amber: activeSeason === season.id ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200" : "bg-white text-gray-600 border-gray-200 hover:border-amber-300",
-              teal: activeSeason === season.id ? "bg-teal-500 text-white border-teal-500 shadow-lg shadow-teal-200" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300",
-            };
-            return (
-              <button key={season.id} onClick={() => setActiveSeason(activeSeason === season.id ? null : season.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200 shrink-0 ${colorMap[season.color]}`}>
-                <span>{season.icon}</span>
-                <div className="text-left">
-                  <p className="leading-none text-xs font-semibold">{season.label}</p>
-                  <p className={`leading-none text-xs mt-0.5 ${activeSeason === season.id ? "text-white/80" : "text-gray-400"}`}>{season.months}</p>
-                </div>
-              </button>
-            );
-          })}
-          {activeSeason && (
-            <button onClick={() => setActiveSeason(null)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-sm text-gray-400 hover:text-gray-600 transition-colors shrink-0">
-              <X className="w-3.5 h-3.5" />Clear
-            </button>
-          )}
-        </div>
-
-        {/* Category Filter */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-8 scrollbar-hide max-w-full">
-          {categories.map((cat) => (
-            <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap shrink-0 transition-all duration-200 ${activeCategory === cat.id ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
-                }`}>
-              <span>{cat.icon}</span>{cat.label}
-            </button>
-          ))}
-        </div>
-
         {/* ═══ Section 01: AI-Curated Recommendations (Bento Grid) ═══ */}
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">
@@ -793,7 +716,7 @@ export default function Home() {
                   </span>
                 </div>
                 <h2 className="font-extrabold text-white" style={{ fontSize: "1.6rem", lineHeight: 1.2 }}>Hidden Gems</h2>
-                <p className="text-xs text-emerald-200/60 mt-0.5">Discover Thailand's best-kept secrets</p>
+                <p className="text-xs text-emerald-200/60 mt-0.5">Discover Thailand&apos;s best-kept secrets</p>
               </div>
             </div>
             <Link href="/explore" className="flex items-center gap-1.5 text-sm text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">

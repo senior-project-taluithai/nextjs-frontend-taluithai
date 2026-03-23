@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BackgroundMap } from "@/components/ai-planner/background-map";
 import { TripResultPanel } from "@/components/ai-planner/trip-result-panel";
 import { ChatHistorySidebar } from "@/components/ai-planner/chat-history-sidebar";
+import { RouteLegend } from "@/components/my-trip/route-legend";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
@@ -37,7 +38,10 @@ function stripJsonBlocks(text: string): string {
   // Remove truncated/unclosed fenced JSON blocks (when LLM hits token limit mid-output)
   cleaned = cleaned.replace(/```(?:json)?\s*\n[\s\S]*$/g, "");
   // Remove standalone large JSON objects/arrays that weren't fenced (starts with { or [ on its own line)
-  cleaned = cleaned.replace(/^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm, "");
+  cleaned = cleaned.replace(
+    /^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm,
+    "",
+  );
   return cleaned.trim();
 }
 
@@ -260,12 +264,20 @@ export default function AIPlannerPage() {
     budgetData,
     hotelData,
     routeData,
+    routePlanId,
+    selectedHotelIndexes,
+    hotelAssignments,
     setRouteData,
+    setRoutePlanId,
+    fetchRoutePlanById,
     sendMessage,
     stop,
     updateThreadId,
     loadConversation,
     reset,
+    onSelectHotel,
+    onAssignHotel,
+    optimizeHotelAssignments,
   } = useAgentChat();
 
   const [trip, setTrip] = useState<PlannedTrip>({
@@ -279,6 +291,9 @@ export default function AIPlannerPage() {
     "trip" | "map" | "chat"
   >("chat");
 
+  const hotelAssignmentsRef = useRef(hotelAssignments);
+  hotelAssignmentsRef.current = hotelAssignments;
+
   // Load messages when conversation changes
   useEffect(() => {
     if (messagesData?.data && messagesData.data.length > 0) {
@@ -287,7 +302,11 @@ export default function AIPlannerPage() {
         role: msg.role,
         content: msg.content,
       }));
-      loadConversation(loadedMessages, activeConversation?.threadId || null);
+      void loadConversation(
+        loadedMessages,
+        activeConversation?.threadId || null,
+        activeConversationId || undefined,
+      );
       setIsNewChat(false);
     } else if (!activeConversationId) {
       setIsNewChat(true);
@@ -312,53 +331,166 @@ export default function AIPlannerPage() {
     }
   }, [tripData]);
 
-  // Auto-call route planner when tripData + hotelData are both available
+  // Debounce ref for route planner
+  const routePlannerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Debounce ref for hotel updates
+  const hotelUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-call route planner when tripData is available with hotel data from any source
   useEffect(() => {
-    if (!tripData || !hotelData || routeData) return;
+    if (routePlannerTimeoutRef.current) {
+      clearTimeout(routePlannerTimeoutRef.current);
+    }
 
-    const places = tripData.days.flatMap((d) =>
-      d.items
-        .filter((i) => i.latitude && i.longitude)
-        .map((i) => ({
-          name: i.name,
-          latitude: i.latitude!,
-          longitude: i.longitude!,
-          pg_place_id: i.pg_place_id,
-          category: i.category,
-        })),
-    );
+    routePlannerTimeoutRef.current = setTimeout(() => {
+      if (!tripData) return;
 
-    const hotels = hotelData.hotels.map((h) => ({
-      name: h.name,
-      latitude: h.latitude,
-      longitude: h.longitude,
-      rating: h.rating,
-      price_range: h.priceRange,
-    }));
+      let hotels: {
+        name: string;
+        latitude: number;
+        longitude: number;
+        rating?: number;
+        price_range?: string;
+      }[] = [];
 
-    if (places.length === 0 || hotels.length === 0) return;
+      if (hotelData?.hotels?.length) {
+        hotels = hotelData.hotels.map((h) => ({
+          name: h.name,
+          latitude: h.latitude,
+          longitude: h.longitude,
+          rating: h.rating,
+          price_range: h.priceRange,
+        }));
+      }
 
-    const BACKEND_URL =
-      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    fetch(`${BACKEND_URL}/route-planner/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        user_location: { latitude: 13.7563, longitude: 100.5018 },
-        destination_province: tripData.province || "",
-        num_days: tripData.days.length,
-        places,
-        shortlisted_hotels: hotels,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setRouteData(data);
+      if (hotels.length === 0 && routeData) {
+        for (const day of routeData.itinerary) {
+          for (const stop of day.route) {
+            if (stop.type === "hotel" && stop.lat && stop.lng) {
+              hotels.push({
+                name: stop.name,
+                latitude: stop.lat,
+                longitude: stop.lng,
+              });
+            }
+          }
+        }
+      }
+
+      if (hotels.length === 0) return;
+
+      const places = tripData.days.flatMap((d) =>
+        d.items
+          .filter((i) => i.latitude && i.longitude)
+          .map((i) => ({
+            name: i.name,
+            latitude: i.latitude!,
+            longitude: i.longitude!,
+            pg_place_id: i.pg_place_id,
+            category: i.category,
+          })),
+      );
+
+      if (places.length === 0) return;
+
+      const BACKEND_URL =
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      fetch(`${BACKEND_URL}/route-planner/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          user_location: { latitude: 13.7563, longitude: 100.5018 },
+          destination_province: tripData.province || "",
+          num_days: tripData.days.length,
+          places,
+          shortlisted_hotels: hotels,
+        }),
       })
-      .catch((err) => console.warn("Route planner failed:", err));
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            if (data.planId) {
+              setRoutePlanId(data.planId);
+            }
+            setRouteData(data);
+          }
+        })
+        .catch((err) => console.warn("Route planner failed:", err));
+    }, 500);
+
+    return () => {
+      if (routePlannerTimeoutRef.current) {
+        clearTimeout(routePlannerTimeoutRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData, hotelData]);
+
+  // Handle hotel assignment changes with debounced PATCH call
+  useEffect(() => {
+    if (hotelUpdateTimeoutRef.current) {
+      clearTimeout(hotelUpdateTimeoutRef.current);
+    }
+
+    hotelUpdateTimeoutRef.current = setTimeout(() => {
+      const currentHotelAssignments = hotelAssignmentsRef.current;
+      if (
+        !routePlanId ||
+        !currentHotelAssignments ||
+        Object.keys(currentHotelAssignments).length === 0 ||
+        !hotelData
+      ) {
+        return;
+      }
+
+      const hotelOverrides = Object.entries(currentHotelAssignments).map(
+        ([night, hotelIdx]) => ({
+          night: parseInt(night),
+          hotel_name: hotelData!.hotels[hotelIdx].name,
+          latitude: hotelData!.hotels[hotelIdx].latitude,
+          longitude: hotelData!.hotels[hotelIdx].longitude,
+        }),
+      );
+
+      const BACKEND_URL =
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      fetch(`${BACKEND_URL}/route-planner/plan/${routePlanId}/hotels`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          hotel_overrides: hotelOverrides,
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            setRouteData(data);
+          }
+        })
+        .catch((err) => console.warn("Hotel update failed:", err));
+    }, 300);
+
+    return () => {
+      if (hotelUpdateTimeoutRef.current) {
+        clearTimeout(hotelUpdateTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelAssignments, routePlanId, hotelData]);
+
+  // Load route plan from DB if we have a planId but no routeData
+  useEffect(() => {
+    if (routePlanId && !routeData) {
+      fetchRoutePlanById(routePlanId).then((data) => {
+        if (data) {
+          setRouteData(data);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routePlanId, routeData]);
 
   const handleSubmit = () => {
     if (!text.trim()) return;
@@ -512,28 +644,34 @@ export default function AIPlannerPage() {
   );
 
   // Include hotels on map
-  const hotelMapItems = hotelData?.hotels?.map((h, idx) => ({
-    id: `hotel-${idx}-${h.name}`,
-    name: h.name,
-    category: 'hotel',
-    latitude: h.latitude,
-    longitude: h.longitude,
-    rating: h.rating,
-    thumbnail_url: h.thumbnail,
-    priceRange: h.priceRange,
-    bookingUrl: h.bookingUrl,
-    address: h.address,
-  })) || [];
+  const hotelMapItems =
+    hotelData?.hotels?.map((h, idx) => ({
+      id: `hotel-${idx}-${h.name}`,
+      name: h.name,
+      category: "hotel",
+      latitude: h.latitude,
+      longitude: h.longitude,
+      rating: h.rating,
+      thumbnail_url: h.thumbnail,
+      priceRange: h.priceRange,
+      bookingUrl: h.bookingUrl,
+      address: h.address,
+    })) || [];
 
   const mapItems = [...tripMapItems, ...hotelMapItems];
 
   // Build route geometries for map polylines
-  const routeGeometries = routeData?.itinerary
-    ?.filter((day) => day.geometry?.coordinates?.length)
-    .map((day) => ({
-      day: day.day,
-      coordinates: day.geometry!.coordinates,
-    })) || [];
+  const routeGeometries =
+    routeData?.itinerary
+      ?.filter((day) => day.geometry?.coordinates?.length)
+      .map((day) => ({
+        day: day.day,
+        coordinates: day.geometry!.coordinates,
+      })) || [];
+
+  const uniqueDays = [...new Set(routeGeometries.map((r) => r.day))].sort(
+    (a, b) => a - b,
+  );
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
@@ -554,6 +692,11 @@ export default function AIPlannerPage() {
           budgetData={budgetData}
           hotelData={hotelData}
           routeData={routeData}
+          selectedHotelIndexes={selectedHotelIndexes}
+          onSelectHotel={onSelectHotel}
+          hotelAssignments={hotelAssignments}
+          onAssignHotel={onAssignHotel}
+          onOptimizeHotels={optimizeHotelAssignments}
           onConfirm={handleConfirmTrip}
           isConfirming={isConfirming}
         />
@@ -577,7 +720,13 @@ export default function AIPlannerPage() {
               days={trip.days}
               budget={trip.budget}
               budgetData={budgetData}
+              hotelData={hotelData}
               routeData={routeData}
+              selectedHotelIndexes={selectedHotelIndexes}
+              onSelectHotel={onSelectHotel}
+              hotelAssignments={hotelAssignments}
+              onAssignHotel={onAssignHotel}
+              onOptimizeHotels={optimizeHotelAssignments}
               onConfirm={handleConfirmTrip}
               isConfirming={isConfirming}
             />
@@ -590,6 +739,7 @@ export default function AIPlannerPage() {
         <div className="absolute inset-0">
           <BackgroundMap items={mapItems} routeGeometries={routeGeometries} />
         </div>
+        <RouteLegend days={uniqueDays} />
       </div>
 
       {/* Chat Panel (right) - full width on mobile */}
@@ -659,134 +809,149 @@ export default function AIPlannerPage() {
               </p>
             </div>
           ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
-              >
-                {msg.role === "user" ? (
-                  <>
-                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
-                      <svg
-                        className="w-3.5 h-3.5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                    <div className="max-w-[85%] relative">
-                      <div
-                        className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
-                        }}
-                      >
-                        <p className="text-xs leading-relaxed whitespace-pre-wrap">
-                          {msg.content}
-                        </p>
+            messages
+              .filter((msg) => {
+                // Skip non-streaming assistant messages with empty content after JSON stripping
+                if (msg.role !== "assistant") return true;
+                const isCurrentlyStreamingMsg =
+                  isStreaming && msg === messages[messages.length - 1];
+                if (isCurrentlyStreamingMsg) return true;
+                const cleaned = msg.content ? stripJsonBlocks(msg.content) : "";
+                return (
+                  cleaned.trim().length > 0 ||
+                  (msg.toolCalls && msg.toolCalls.length > 0)
+                );
+              })
+              .map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
+                >
+                  {msg.role === "user" ? (
+                    <>
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
+                        <svg
+                          className="w-3.5 h-3.5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
-                      <Bot className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <div className="flex-1 max-w-[calc(100%-2rem)]">
-                      <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
-                        {(() => {
-                          const isCurrentlyStreaming =
-                            isStreaming &&
-                            msg === messages[messages.length - 1];
-                          const cleanText = msg.content
-                            ? stripJsonBlocks(msg.content)
-                            : "";
-                          return (
-                            <div className="space-y-2">
-                              {/* Tool calls */}
-                              {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                <div className="space-y-2">
-                                  {msg.toolCalls.map((tc: ToolCall) => (
-                                    <ToolCallDisplay
-                                      key={tc.id}
-                                      toolCall={tc}
-                                    />
-                                  ))}
-                                </div>
-                              )}
+                      <div className="max-w-[85%] relative">
+                        <div
+                          className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
+                          }}
+                        >
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
+                        <Bot className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <div className="flex-1 max-w-[calc(100%-2rem)]">
+                        <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+                          {(() => {
+                            const isCurrentlyStreaming =
+                              isStreaming &&
+                              msg === messages[messages.length - 1];
+                            const cleanText = msg.content
+                              ? stripJsonBlocks(msg.content)
+                              : "";
+                            return (
+                              <div className="space-y-2">
+                                {/* Tool calls */}
+                                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                  <div className="space-y-2">
+                                    {msg.toolCalls.map((tc: ToolCall) => (
+                                      <ToolCallDisplay
+                                        key={tc.id}
+                                        toolCall={tc}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
 
-                              {isCurrentlyStreaming ? (
-                                !cleanText && !msg.toolCalls?.length ? (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Loader size={14} />
-                                    <span className="text-xs">Thinking...</span>
-                                  </div>
-                                ) : msg.toolCalls?.length ? (
-                                  <div className="flex items-center gap-2 text-muted-foreground mt-2">
-                                    <Loader size={14} />
-                                    <span className="text-xs">
-                                      Processing...
-                                    </span>
-                                  </div>
+                                {isCurrentlyStreaming ? (
+                                  !cleanText && !msg.toolCalls?.length ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Thinking...
+                                      </span>
+                                    </div>
+                                  ) : msg.toolCalls?.length ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Processing...
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Writing response...
+                                      </span>
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Loader size={14} />
-                                    <span className="text-xs">
-                                      Writing response...
-                                    </span>
-                                  </div>
-                                )
-                              ) : (
-                                /* Done streaming */
-                                (() => {
-                                  const sanitized = cleanText
-                                    ? sanitizeMarkdownTables(cleanText)
-                                    : "";
-                                  const isLatest =
-                                    msg === messages[messages.length - 1];
-                                  return (
-                                    <>
-                                      {sanitized ? (
-                                        isLatest ? (
-                                          <div className="whitespace-pre-wrap">
-                                            <TypewriterMessage
-                                              text={sanitized}
-                                            />
-                                          </div>
-                                        ) : (
-                                          <div className="whitespace-pre-wrap">
-                                            <MessageResponse>
-                                              {sanitized}
-                                            </MessageResponse>
-                                          </div>
-                                        )
-                                      ) : null}
-                                      {trip.days.length > 0 && isLatest && (
-                                        <TripDayCards days={trip.days} />
-                                      )}
-                                    </>
-                                  );
-                                })()
-                              )}
-                            </div>
-                          );
-                        })()}
+                                  /* Done streaming */
+                                  (() => {
+                                    const sanitized = cleanText
+                                      ? sanitizeMarkdownTables(cleanText)
+                                      : "";
+                                    const isLatest =
+                                      msg === messages[messages.length - 1];
+                                    return (
+                                      <>
+                                        {sanitized ? (
+                                          isLatest ? (
+                                            <div className="whitespace-pre-wrap">
+                                              <TypewriterMessage
+                                                text={sanitized}
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="whitespace-pre-wrap">
+                                              <MessageResponse>
+                                                {sanitized}
+                                              </MessageResponse>
+                                            </div>
+                                          )
+                                        ) : null}
+                                        {trip.days.length > 0 && isLatest && (
+                                          <TripDayCards days={trip.days} />
+                                        )}
+                                      </>
+                                    );
+                                  })()
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
+                    </>
+                  )}
+                </div>
+              ))
           )}
           {/* Add spacer at bottom for scrolling */}
           <div className="h-4" />

@@ -7,6 +7,7 @@ import {
   Compass,
   Heart,
   LogIn,
+  LogOut,
   Map,
   Sparkles,
   UserPlus,
@@ -389,16 +390,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         Log out
                       </DropdownMenuItem>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
+                    <AlertDialogContent className="bg-[#0f1923] border-white/10 text-white">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                            <LogOut className="w-5 h-5 text-white/70" />
+                          </div>
+                          <AlertDialogTitle className="text-white">Are you sure?</AlertDialogTitle>
+                        </div>
+                        <AlertDialogDescription className="text-white/60">
                           This will log you out of your account.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleLogout}>Continue</AlertDialogAction>
+                        <AlertDialogCancel className="bg-transparent text-white/70 hover:text-white hover:bg-white/10 border border-white/10">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleLogout} className="bg-emerald-500 hover:bg-emerald-600 text-white">Log out</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>

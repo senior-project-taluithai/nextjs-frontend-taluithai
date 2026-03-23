@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import {
   PieChart,
   Pie,
@@ -23,6 +23,10 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
+  Pencil,
+  RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -31,6 +35,105 @@ import type {
   BudgetCategory,
   BudgetExpense,
 } from "@/hooks/useAgentChat";
+import {
+  adjustBudgetProportionally,
+  detectTripType,
+  getDefaultAllocations,
+  ALLOCATION_BY_TRIP_TYPE,
+} from "@/lib/budget-utils";
+
+const DEFAULT_CATEGORIES: BudgetCategory[] = [
+  {
+    id: "accommodation",
+    name: "Accommodation",
+    color: "#7C3AED",
+    allocated: 0,
+    spent: 0,
+  },
+  { id: "food", name: "Food", color: "#10b981", allocated: 0, spent: 0 },
+  {
+    id: "transport",
+    name: "Transport",
+    color: "#3b82f6",
+    allocated: 0,
+    spent: 0,
+  },
+  {
+    id: "activities",
+    name: "Activities",
+    color: "#f59e0b",
+    allocated: 0,
+    spent: 0,
+  },
+];
+
+function normalizeBudgetData(budget: any, daysCount: number): BudgetData {
+  if (!budget) {
+    return {
+      total: 0,
+      categories: DEFAULT_CATEGORIES,
+      expenses: [],
+      dailyBudgets: [],
+    };
+  }
+
+  if (budget.categories && Array.isArray(budget.categories)) {
+    return {
+      total: budget.total || 0,
+      suggested_spent: budget.suggested_spent,
+      categories: budget.categories,
+      expenses: budget.expenses || [],
+      dailyBudgets: budget.dailyBudgets || [],
+    };
+  }
+
+  const categories: BudgetCategory[] = [
+    {
+      id: "accommodation",
+      name: "Accommodation",
+      color: "#7C3AED",
+      allocated: budget.accommodation || 0,
+      spent: 0,
+    },
+    {
+      id: "food",
+      name: "Food",
+      color: "#10b981",
+      allocated: budget.food || 0,
+      spent: 0,
+    },
+    {
+      id: "transport",
+      name: "Transport",
+      color: "#3b82f6",
+      allocated: budget.transport || 0,
+      spent: 0,
+    },
+    {
+      id: "activities",
+      name: "Activities",
+      color: "#f59e0b",
+      allocated: budget.activities || 0,
+      spent: 0,
+    },
+  ];
+
+  const dailyBudgets =
+    daysCount > 0
+      ? Array.from({ length: daysCount }, (_, i) => ({
+          day: i + 1,
+          allocated: Math.round((budget.total || 0) / daysCount),
+          spent: 0,
+        }))
+      : [];
+
+  return {
+    total: budget.total || 0,
+    categories,
+    expenses: [],
+    dailyBudgets,
+  };
+}
 
 /* ─── Category config ─────────────────────────── */
 const CAT_INFO = {
@@ -128,6 +231,8 @@ export function BudgetPanel({
   daysCount: number;
   onUpdateBudget?: (newData: BudgetData) => void;
 }) {
+  const normalizedData = normalizeBudgetData(data, daysCount);
+
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [newExpName, setNewExpName] = useState("");
   const [newExpAmount, setNewExpAmount] = useState("");
@@ -140,51 +245,70 @@ export function BudgetPanel({
     [],
   );
 
-  if (!data) return null;
+  // Budget editing state
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
+  const [isEditingTotal, setIsEditingTotal] = useState(false);
+  const [editTotalValue, setEditTotalValue] = useState<number>(0);
 
-  // Merge data.expenses and localAddedExpenses, ensuring unique IDs
+  // Merge normalizedData.expenses and localAddedExpenses, ensuring unique IDs
   // This allows optimistic UI updates without showing duplicates when the backend data refreshes
-  const allExpensesRaw = [...(data.expenses || []), ...localAddedExpenses];
+  const allExpensesRaw = [
+    ...(normalizedData.expenses || []),
+    ...localAddedExpenses,
+  ];
   const uniqueExpensesMap = new Map<string, BudgetExpense>();
-  allExpensesRaw.forEach((exp) => uniqueExpensesMap.set(exp.id, exp));
-  const allExpenses = Array.from(uniqueExpensesMap.values());
+  allExpensesRaw.forEach((exp) => {
+    if (exp && exp.id) {
+      uniqueExpensesMap.set(exp.id, exp);
+    }
+  });
+  const allExpenses = Array.from(uniqueExpensesMap.values()).filter(Boolean);
 
   /* derived numbers dynamically calculated from allExpenses */
-  const totalBudget = data.total || 0; // Maximum Budget
+  const totalBudget = normalizedData.total || 0; // Maximum Budget
   const totalSpent = useMemo(
     () => allExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0),
     [allExpenses],
   );
 
   const totalAllocated = useMemo(
-    () => (data.categories || []).reduce((s, c) => s + (c.allocated || 0), 0),
-    [data.categories],
+    () =>
+      (normalizedData.categories || []).reduce(
+        (s, c) => s + (c.allocated || 0),
+        0,
+      ),
+    [normalizedData.categories],
   );
 
   const spentPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
   const displaySpentPct = Math.min(spentPct, 100);
   const overBudget = totalSpent > totalBudget && totalBudget > 0;
   const remaining = Math.abs(totalBudget - totalSpent);
+  const suggestedPct =
+    totalBudget > 0 && normalizedData.suggested_spent
+      ? Math.min((normalizedData.suggested_spent / totalBudget) * 100, 100)
+      : null;
 
   // Recalculate categories dynamically
   const categories = useMemo(() => {
-    return (data.categories || []).map((cat) => {
+    return (normalizedData.categories || []).map((cat) => {
       const catSpent = allExpenses
         .filter((e) => e.categoryId === cat.id)
         .reduce((sum, e) => sum + (e.amount || 0), 0);
       return { ...cat, spent: catSpent };
     });
-  }, [data.categories, allExpenses]);
+  }, [normalizedData.categories, allExpenses]);
 
   // Recalculate daily budgets dynamically
   const dailyBudgets = useMemo(() => {
-    return (data.dailyBudgets || []).map((db) => {
+    return (normalizedData.dailyBudgets || []).map((db) => {
       const daySpent = allExpenses
         .filter((e) => e.day === db.day)
         .reduce((sum, e) => sum + (e.amount || 0), 0);
       return { ...db, spent: daySpent };
     });
-  }, [data.dailyBudgets, allExpenses]);
+  }, [normalizedData.dailyBudgets, allExpenses]);
 
   /* Fix for recharts pie - ensuring data exists and mapping properties correctly */
   const pieData = useMemo(() => {
@@ -221,47 +345,164 @@ export function BudgetPanel({
         name: `Day ${day}`,
         spent,
         allocated:
-          data.dailyBudgets?.find((d) => d.day === day)?.allocated ||
+          normalizedData.dailyBudgets?.find((d) => d.day === day)?.allocated ||
           Math.round(totalBudget / daysCount),
       }));
-  }, [allExpenses, data.dailyBudgets, totalBudget, daysCount]);
+  }, [allExpenses, normalizedData.dailyBudgets, totalBudget, daysCount]);
+
+  // Handler: Edit category limit with proportional adjustment
+  const handleCategoryLimitChange = useCallback(
+    (categoryId: string, newAllocated: number) => {
+      if (!onUpdateBudget || !normalizedData.total) return;
+
+      const totalBudget = normalizedData.total;
+      const newPercentage = newAllocated / totalBudget;
+
+      // Get current allocation percentages
+      const currentAllocations: Record<string, number> = {};
+      for (const cat of categories) {
+        currentAllocations[cat.id] = (cat.allocated || 0) / totalBudget;
+      }
+
+      // Adjust proportionally
+      const newAllocations = adjustBudgetProportionally(
+        currentAllocations,
+        categoryId,
+        newPercentage,
+      );
+
+      // Calculate new allocated amounts
+      const updatedCategories = categories.map((cat) => ({
+        ...cat,
+        allocated: Math.round(totalBudget * (newAllocations[cat.id] ?? 0)),
+      }));
+
+      onUpdateBudget({
+        ...normalizedData,
+        categories: updatedCategories,
+        allocationPercentages: newAllocations,
+      });
+    },
+    [categories, normalizedData, onUpdateBudget],
+  );
+
+  // Handler: Edit total budget (amounts change, percentages stay same)
+  const handleTotalBudgetChange = useCallback(
+    (newTotal: number) => {
+      if (!onUpdateBudget) return;
+
+      const percentages =
+        normalizedData.allocationPercentages ??
+        categories.reduce(
+          (acc, cat) => {
+            acc[cat.id] =
+              totalBudget > 0 ? (cat.allocated || 0) / totalBudget : 0;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+
+      // Recalculate all allocated amounts (percentages stay the same)
+      const updatedCategories = categories.map((cat) => ({
+        ...cat,
+        allocated: Math.round(newTotal * (percentages[cat.id] ?? 0)),
+      }));
+
+      // Recalculate daily budgets
+      const updatedDailyBudgets = (normalizedData.dailyBudgets || []).map(
+        (db) => ({
+          ...db,
+          allocated: Math.round(newTotal / daysCount),
+        }),
+      );
+
+      onUpdateBudget({
+        ...normalizedData,
+        total: newTotal,
+        categories: updatedCategories,
+        dailyBudgets: updatedDailyBudgets,
+        allocationPercentages: percentages,
+      });
+    },
+    [categories, normalizedData, totalBudget, daysCount, onUpdateBudget],
+  );
+
+  // Handler: Reset to default allocations based on trip type
+  const handleResetToDefault = useCallback(() => {
+    if (!onUpdateBudget) return;
+
+    const tripType = (normalizedData.tripType as string) ?? "default";
+    const defaultAllocations = getDefaultAllocations(tripType as any);
+
+    const updatedCategories = categories.map((cat) => ({
+      ...cat,
+      allocated: Math.round(totalBudget * (defaultAllocations[cat.id] ?? 0)),
+    }));
+
+    onUpdateBudget({
+      ...normalizedData,
+      categories: updatedCategories,
+      allocationPercentages: defaultAllocations,
+    });
+  }, [categories, normalizedData, totalBudget, onUpdateBudget]);
 
   return (
     <div>
       <div className="px-5 py-5 space-y-5">
         {/* ── Budget Overview Card ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+          <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">
-                Estimated Total Budget
-              </p>
-              <div className="flex items-center gap-1">
-                <span className="text-2xl font-bold text-gray-900">
-                  ฿{totalBudget.toLocaleString()}
-                </span>
-              </div>
+              <p className="text-xs text-gray-400 mb-0.5">Estimated Budget</p>
+              {isEditingTotal && onUpdateBudget ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-gray-900">฿</span>
+                  <input
+                    type="number"
+                    value={editTotalValue}
+                    onChange={(e) => setEditTotalValue(Number(e.target.value))}
+                    onBlur={() => {
+                      handleTotalBudgetChange(editTotalValue);
+                      setIsEditingTotal(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleTotalBudgetChange(editTotalValue);
+                        setIsEditingTotal(false);
+                      }
+                      if (e.key === "Escape") {
+                        setIsEditingTotal(false);
+                      }
+                    }}
+                    className="text-2xl font-bold text-gray-900 w-32 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p
+                    className={`text-2xl font-bold text-gray-900 ${onUpdateBudget ? "cursor-pointer hover:text-blue-600" : ""}`}
+                    onClick={() => {
+                      if (onUpdateBudget) {
+                        setIsEditingTotal(true);
+                        setEditTotalValue(totalBudget);
+                      }
+                    }}
+                    title={onUpdateBudget ? "Click to edit budget" : ""}
+                  >
+                    ฿{totalBudget.toLocaleString()}
+                  </p>
+                  {onUpdateBudget && (
+                    <Pencil className="w-4 h-4 text-gray-400" />
+                  )}
+                </div>
+              )}
             </div>
             <div className="text-right">
-              {data.suggested_spent && data.suggested_spent !== totalBudget ? (
-                <>
-                  <p className="text-xs text-gray-400 mb-0.5">
-                    Suggested Spent
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-500">
-                    ฿{data.suggested_spent.toLocaleString()}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-gray-400 mb-0.5">Total Spent</p>
-                  <p
-                    className={`text-2xl font-bold ${overBudget ? "text-rose-500" : "text-emerald-500"}`}
-                  >
-                    ฿{totalSpent.toLocaleString()}
-                  </p>
-                </>
-              )}
+              <p className="text-xs text-gray-400 mb-0.5">Actual Spent</p>
+              <p className="text-2xl font-bold text-gray-900">
+                ฿{totalSpent.toLocaleString()}
+              </p>
             </div>
           </div>
 
@@ -274,6 +515,13 @@ export function BudgetPanel({
                 animate={{ width: `${displaySpentPct}%` }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
               />
+              {suggestedPct !== null && suggestedPct > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-gray-400"
+                  style={{ left: `${suggestedPct}%` }}
+                  title={`Suggested: ฿${normalizedData.suggested_spent?.toLocaleString()}`}
+                />
+              )}
             </div>
             <div className="flex items-center justify-between mt-1.5">
               <span className="text-xs text-gray-400">
@@ -537,9 +785,56 @@ export function BudgetPanel({
                         <p className="text-sm font-semibold text-gray-800 truncate">
                           {cat.name}
                         </p>
-                        <p className="text-sm font-bold text-gray-900">
-                          Limit: ฿{(cat.allocated || 0).toLocaleString()}
-                        </p>
+                        {editingCategory === cat.id && onUpdateBudget ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-gray-900">
+                              Limit: ฿
+                            </span>
+                            <input
+                              type="number"
+                              value={editValue}
+                              onChange={(e) =>
+                                setEditValue(Number(e.target.value))
+                              }
+                              onBlur={() => {
+                                handleCategoryLimitChange(cat.id, editValue);
+                                setEditingCategory(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleCategoryLimitChange(cat.id, editValue);
+                                  setEditingCategory(null);
+                                }
+                                if (e.key === "Escape") {
+                                  setEditingCategory(null);
+                                }
+                              }}
+                              className="text-sm font-bold text-gray-900 w-24 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <p
+                            className={`text-sm font-bold text-gray-900 ${onUpdateBudget ? "cursor-pointer hover:text-blue-600" : ""}`}
+                            onClick={() => {
+                              if (onUpdateBudget) {
+                                setEditingCategory(cat.id);
+                                setEditValue(cat.allocated || 0);
+                              }
+                            }}
+                            title={onUpdateBudget ? "Click to edit limit" : ""}
+                          >
+                            Limit: ฿{(cat.allocated || 0).toLocaleString()}
+                            <span className="text-xs text-gray-400 ml-1">
+                              (
+                              {(
+                                ((cat.allocated || 0) / totalBudget) *
+                                100
+                              ).toFixed(0)}
+                              %)
+                            </span>
+                          </p>
+                        )}
                       </div>
                       <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-1">
                         <div
@@ -576,11 +871,23 @@ export function BudgetPanel({
             <span className="text-xs text-gray-500">
               {categories.length} Categories
             </span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Allocated</span>
-              <span className="text-sm font-bold text-gray-900">
-                ฿{totalAllocated.toLocaleString()}
-              </span>
+            <div className="flex items-center gap-3">
+              {onUpdateBudget && (
+                <button
+                  onClick={handleResetToDefault}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  title="Reset to default allocations based on trip type"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Allocated</span>
+                <span className="text-sm font-bold text-gray-900">
+                  ฿{totalAllocated.toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -774,7 +1081,7 @@ export function BudgetPanel({
             )}
           </AnimatePresence>
 
-          <div className="divide-y divide-gray-50">
+          <div>
             {allExpenses.length === 0 ? (
               <div className="py-8 text-center bg-white">
                 <p className="text-sm text-gray-400">
@@ -782,78 +1089,99 @@ export function BudgetPanel({
                 </p>
               </div>
             ) : (
-              allExpenses.map((exp) => {
-                const info = getCatInfo(exp.categoryId);
-                const Icon = info.icon;
-                const catColor =
-                  categories.find((c) => c.id === exp.categoryId)?.color ||
-                  info.text.replace("text-", "#") + "00";
-                return (
-                  <div
-                    key={exp.id}
-                    className="flex items-center px-5 py-3 hover:bg-gray-50 transition-colors group"
-                  >
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3"
-                      style={{ backgroundColor: hexToRgba(catColor, 0.12) }}
-                    >
-                      <Icon className="w-4 h-4" style={{ color: catColor }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {exp.name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: hexToRgba(catColor, 0.12),
-                            color: catColor,
-                          }}
-                        >
-                          {exp.note ||
-                            categories.find((c) => c.id === exp.categoryId)
-                              ?.name ||
-                            info.text.replace("text-", "")}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          Day {exp.day}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-3">
-                      <p className="text-sm font-bold text-gray-900">
-                        ฿{exp.amount.toLocaleString()}
-                      </p>
-                      <button
-                        onClick={() => {
-                          const updatedExpenses = allExpenses.filter(
-                            (e) => e.id !== exp.id,
-                          );
-                          // 1. Update local state
-                          setLocalAddedExpenses(
-                            localAddedExpenses.filter((e) => e.id !== exp.id),
-                          );
+              (() => {
+                const groupedByDay = allExpenses.reduce<
+                  Record<number, BudgetExpense[]>
+                >((acc, exp) => {
+                  const day = exp.day || 1;
+                  if (!acc[day]) acc[day] = [];
+                  acc[day].push(exp);
+                  return acc;
+                }, {});
 
-                          // 2. Trigger parent update
-                          if (onUpdateBudget && data) {
-                            onUpdateBudget({
-                              ...data,
-                              expenses: updatedExpenses,
-                            });
-                          }
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                const sortedDays = Object.keys(groupedByDay)
+                  .map(Number)
+                  .sort((a, b) => a - b);
+
+                return sortedDays.map((day) => (
+                  <div key={day}>
+                    <div className="px-5 py-2 bg-gray-50/80 border-t border-gray-100">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        Day {day}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {groupedByDay[day].map((exp) => {
+                        const info = getCatInfo(exp.categoryId);
+                        const Icon = info.icon;
+                        const catColor =
+                          categories.find((c) => c.id === exp.categoryId)
+                            ?.color || info.text.replace("text-", "#") + "00";
+                        const catName =
+                          categories.find((c) => c.id === exp.categoryId)
+                            ?.name || info.text.replace("text-", "");
+
+                        return (
+                          <div
+                            key={exp.id}
+                            className="flex items-center px-5 py-3 hover:bg-gray-50/80 transition-colors group"
+                          >
+                            <div
+                              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mr-3"
+                              style={{
+                                backgroundColor: hexToRgba(catColor, 0.12),
+                              }}
+                            >
+                              <Icon
+                                className="w-4 h-4"
+                                style={{ color: catColor }}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0 mr-4">
+                              <p className="text-sm font-semibold text-gray-800 break-words leading-snug">
+                                {exp.name}
+                              </p>
+                              <p className="text-[11px] text-gray-400 mt-0.5">
+                                {catName}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <p className="text-sm font-bold text-gray-900 tabular-nums">
+                                ฿{exp.amount.toLocaleString()}
+                              </p>
+                              <button
+                                onClick={() => {
+                                  const updatedExpenses = allExpenses.filter(
+                                    (e) => e.id !== exp.id,
+                                  );
+                                  setLocalAddedExpenses(
+                                    localAddedExpenses.filter(
+                                      (e) => e.id !== exp.id,
+                                    ),
+                                  );
+
+                                  if (onUpdateBudget && data) {
+                                    onUpdateBudget({
+                                      ...data,
+                                      expenses: updatedExpenses,
+                                    });
+                                  }
+                                }}
+                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })
+                ));
+              })()
             )}
           </div>
-          <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+          <div className="px-5 py-4 bg-gray-50/95 border-t border-gray-100 flex items-center justify-between sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <span className="text-sm text-gray-500">
               {allExpenses.length} expenses
             </span>

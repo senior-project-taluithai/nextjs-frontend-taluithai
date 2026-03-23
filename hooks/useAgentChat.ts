@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 export interface ChatMessage {
   id: string;
@@ -110,12 +111,36 @@ export interface ItineraryDay {
 }
 
 export interface RouteData {
+  planId?: number;
   itinerary: ItineraryDay[];
   summary: {
     total_driving_distance_km: number;
     total_driving_duration_mins: number;
     hotels_used: { name: string; nights: number }[];
   };
+}
+
+export interface DayGeometry {
+  day: number;
+  geometry: { type: string; coordinates: [number, number][] };
+}
+
+export interface RoutePlanResponse {
+  id: number;
+  destinationProvince: string;
+  numDays: number;
+  dayGeometries: DayGeometry[];
+  routeData: {
+    itinerary: Omit<ItineraryDay, "geometry">[];
+    summary: {
+      total_driving_distance_km: number;
+      total_driving_duration_mins: number;
+      hotels_used: { name: string; nights: number }[];
+    };
+  };
+  totalDistanceKm: number;
+  totalDurationMins: number;
+  createdAt: string;
 }
 
 export interface PlannedDay {
@@ -148,12 +173,25 @@ interface UseAgentChatReturn {
   budgetData: BudgetData | null;
   hotelData: HotelData | null;
   routeData: RouteData | null;
+  routePlanId: number | null;
+  selectedHotelIndexes: Set<number>;
+  hotelAssignments: Record<number, number>;
   setRouteData: (data: RouteData | null) => void;
+  setRoutePlanId: (id: number | null) => void;
+  fetchRoutePlanById: (planId: number) => Promise<RouteData | null>;
   sendMessage: (content: string) => Promise<void>;
   stop: () => void;
   updateThreadId: (id: string | null) => void;
-  loadConversation: (messages: ChatMessage[], threadId: string | null) => void;
+  loadConversation: (
+    messages: ChatMessage[],
+    threadId: string | null,
+    conversationId?: string,
+  ) => Promise<void>;
   reset: () => void;
+  onSelectHotel: (index: number) => void;
+  onAssignHotel: (night: number, hotelIndex: number) => void;
+  onSelectAllHotels: () => void;
+  optimizeHotelAssignments: () => void;
 }
 
 let messageCounter = 0;
@@ -202,9 +240,58 @@ export function useAgentChat(): UseAgentChatReturn {
   const [threadId, setThreadIdState] = useState<string | null>(null);
   const [tripData, setTripData] = useState<PlannedTrip | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const budgetDataRef = useRef(budgetData);
+  budgetDataRef.current = budgetData;
   const [hotelData, setHotelData] = useState<HotelData | null>(null);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
+  const [routePlanId, setRoutePlanIdState] = useState<number | null>(null);
+  const [selectedHotelIndexes, setSelectedHotelIndexes] = useState<Set<number>>(
+    new Set(),
+  );
+  const [hotelAssignments, setHotelAssignments] = useState<
+    Record<number, number>
+  >({});
   const abortRef = useRef<AbortController | null>(null);
+
+  const fetchRoutePlanById = useCallback(
+    async (planId: number): Promise<RouteData | null> => {
+      try {
+        const BACKEND_URL =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+        const res = await fetch(`${BACKEND_URL}/route-plans/${planId}`);
+        if (!res.ok) return null;
+
+        const data: RoutePlanResponse = await res.json();
+
+        const routeDataFromPlan: RouteData = {
+          planId: data.id,
+          itinerary: data.dayGeometries.map((dg) => ({
+            day: dg.day,
+            transit_advice: null,
+            route: [],
+            daily_distance_km: 0,
+            daily_duration_mins: 0,
+            geometry: dg.geometry,
+          })),
+          summary: data.routeData?.summary || {
+            total_driving_distance_km: data.totalDistanceKm,
+            total_driving_duration_mins: data.totalDurationMins,
+            hotels_used: [],
+          },
+        };
+
+        return routeDataFromPlan;
+      } catch (err) {
+        console.warn("Failed to fetch route plan:", err);
+        return null;
+      }
+    },
+    [],
+  );
+
+  const setRoutePlanId = useCallback((id: number | null) => {
+    setRoutePlanIdState(id);
+  }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -239,8 +326,10 @@ export function useAgentChat(): UseAgentChatReturn {
       const toolCalls: ToolCall[] = [];
 
       try {
-        // If trip data exists, include it as context for modification requests
+        // Pass existing data as context so the agent can modify rather than recreate
         let userContent = content.trim();
+        const contextBlocks: string[] = [];
+
         if (tripData) {
           const tripContext = JSON.stringify({
             name: tripData.name,
@@ -261,7 +350,43 @@ export function useAgentChat(): UseAgentChatReturn {
               })),
             })),
           });
-          userContent = `[CURRENT_TRIP]\n\`\`\`json\n${tripContext}\n\`\`\`\n\n[USER_REQUEST]\n${content.trim()}`;
+          contextBlocks.push(
+            `[CURRENT_TRIP]\n\`\`\`json\n${tripContext}\n\`\`\``,
+          );
+        }
+
+        if (budgetData) {
+          const budgetContext = JSON.stringify({
+            total: budgetData.total,
+            suggested_spent: budgetData.suggested_spent,
+            categories: budgetData.categories,
+            dailyBudgets: budgetData.dailyBudgets,
+            expenses: budgetData.expenses,
+          });
+          contextBlocks.push(
+            `[CURRENT_BUDGET]\n\`\`\`json\n${budgetContext}\n\`\`\``,
+          );
+        }
+
+        if (hotelData) {
+          const hotelContext = JSON.stringify({
+            hotels: hotelData.hotels.map((h) => ({
+              name: h.name,
+              address: h.address,
+              latitude: h.latitude,
+              longitude: h.longitude,
+              rating: h.rating,
+              priceRange: h.priceRange,
+              amenities: h.amenities,
+            })),
+          });
+          contextBlocks.push(
+            `[CURRENT_HOTELS]\n\`\`\`json\n${hotelContext}\n\`\`\``,
+          );
+        }
+
+        if (contextBlocks.length > 0) {
+          userContent = `${contextBlocks.join("\n\n")}\n\n[USER_REQUEST]\n${content.trim()}`;
         }
 
         // Only send the new message — the backend checkpointer handles history
@@ -309,6 +434,7 @@ export function useAgentChat(): UseAgentChatReturn {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let currentEventType = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -317,8 +443,6 @@ export function useAgentChat(): UseAgentChatReturn {
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
-
-          let currentEventType = "";
 
           for (const line of lines) {
             if (line.startsWith("event: ")) {
@@ -334,6 +458,42 @@ export function useAgentChat(): UseAgentChatReturn {
 
               // Process the final 'values' event — contains complete state from all agents
               if (currentEventType === "values") {
+                // Prefer direct state properties from backend (reliable for modifications)
+                // Backend sends currentTrip, currentBudget, currentHotels in values event
+                const currentTrip = data.currentTrip as PlannedTrip | undefined;
+                const currentBudget = data.currentBudget as
+                  | BudgetData
+                  | undefined;
+                const currentHotelsRaw = data.currentHotels as unknown;
+
+                if (
+                  currentTrip &&
+                  Array.isArray(currentTrip.days) &&
+                  currentTrip.days.length > 0
+                ) {
+                  setTripData(currentTrip);
+                }
+                if (currentBudget && typeof currentBudget.total === "number") {
+                  setBudgetData(currentBudget);
+                }
+                if (
+                  currentHotelsRaw &&
+                  typeof currentHotelsRaw === "object" &&
+                  currentHotelsRaw !== null
+                ) {
+                  const hotelsObj = currentHotelsRaw as {
+                    hotels?: HotelItem[];
+                  };
+                  if (
+                    Array.isArray(hotelsObj.hotels) &&
+                    hotelsObj.hotels.length > 0
+                  ) {
+                    setHotelData({ hotels: hotelsObj.hotels });
+                  }
+                }
+
+                // Fallback: parse from AI message content (for initial trip creation)
+                // Only use this if backend didn't send direct state properties
                 const msgs = Array.isArray(data.messages) ? data.messages : [];
                 const allAiText = msgs
                   .filter(
@@ -346,14 +506,40 @@ export function useAgentChat(): UseAgentChatReturn {
                   .join("\n\n");
 
                 if (allAiText) {
-                  const trip = extractTripFromMarkdown(allAiText);
-                  if (trip) setTripData(trip);
-                  const budget = extractBudgetFromMarkdown(allAiText);
-                  if (budget) setBudgetData(budget);
-                  const hotel = extractHotelFromMarkdown(allAiText);
-                  if (hotel) setHotelData(hotel);
+                  // Only parse from markdown if no direct state was provided
+                  if (!currentTrip || !currentTrip.days?.length) {
+                    const trip = extractTripFromMarkdown(allAiText);
+                    if (trip) setTripData(trip);
+                  }
+                  if (!currentBudget) {
+                    const budget = extractBudgetFromMarkdown(allAiText);
+                    if (budget) setBudgetData(budget);
+                  }
+                  if (
+                    !currentHotelsRaw ||
+                    typeof currentHotelsRaw !== "object"
+                  ) {
+                    const hotel = extractHotelFromMarkdown(allAiText);
+                    if (hotel) setHotelData(hotel);
+                  }
                   const route = extractRouteFromMarkdown(allAiText);
                   if (route) setRouteData(route);
+
+                  // Update chat message with clean text (strip JSON code blocks)
+                  const cleanText = allAiText
+                    .replace(/```(?:json)?\s*\n[\s\S]*?```/g, "")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim();
+                  if (cleanText) {
+                    fullText = cleanText;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? { ...m, content: cleanText }
+                          : m,
+                      ),
+                    );
+                  }
                 }
               }
 
@@ -486,6 +672,29 @@ export function useAgentChat(): UseAgentChatReturn {
                         : m,
                     ),
                   );
+
+                  // Extract hotels from searchHotels tool output instantly
+                  if (toolName === "searchHotels") {
+                    const outputContent =
+                      data?.data?.output?.kwargs?.content ||
+                      data?.data?.output?.content ||
+                      data?.data?.output;
+                    if (typeof outputContent === "string") {
+                      try {
+                        const parsed = JSON.parse(outputContent);
+                        if (
+                          parsed &&
+                          typeof parsed === "object" &&
+                          Array.isArray(parsed.hotels) &&
+                          parsed.hotels.length > 0
+                        ) {
+                          setHotelData({ hotels: parsed.hotels });
+                        }
+                      } catch {
+                        // Not valid JSON, ignore
+                      }
+                    }
+                  }
                 }
               }
             } catch {
@@ -535,7 +744,7 @@ export function useAgentChat(): UseAgentChatReturn {
         abortRef.current = null;
       }
     },
-    [isStreaming, threadId, tripData],
+    [isStreaming, threadId, tripData, budgetData, hotelData],
   );
 
   const updateThreadId = useCallback((id: string | null) => {
@@ -543,7 +752,11 @@ export function useAgentChat(): UseAgentChatReturn {
   }, []);
 
   const loadConversation = useCallback(
-    (loadedMessages: ChatMessage[], loadedThreadId: string | null) => {
+    async (
+      loadedMessages: ChatMessage[],
+      loadedThreadId: string | null,
+      conversationId?: string,
+    ) => {
       setMessages(loadedMessages);
       setThreadIdState(loadedThreadId);
       setTripData(null);
@@ -551,7 +764,57 @@ export function useAgentChat(): UseAgentChatReturn {
       setHotelData(null);
       setRouteData(null);
 
-      // Extract trip/budget/hotel data from loaded messages
+      // Try to fetch persisted agent state first
+      if (conversationId || loadedThreadId) {
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+          const stateId = conversationId || loadedThreadId;
+          const stateRes = await fetch(`${BACKEND_URL}/chat/${stateId}/state`, {
+            credentials: "include",
+          });
+
+          if (stateRes.ok) {
+            const state = await stateRes.json();
+
+            // Use persisted state preferentially over markdown parsing
+            if (
+              state?.currentTrip &&
+              Array.isArray(state.currentTrip.days) &&
+              state.currentTrip.days.length > 0
+            ) {
+              setTripData(state.currentTrip);
+            }
+
+            if (
+              state?.currentBudget &&
+              typeof state.currentBudget.total === "number"
+            ) {
+              setBudgetData(state.currentBudget);
+            }
+
+            if (
+              state?.currentHotels &&
+              Array.isArray(state.currentHotels.hotels)
+            ) {
+              setHotelData({ hotels: state.currentHotels.hotels });
+            }
+
+            // If we got persisted state, return early (no need to parse markdown)
+            if (
+              state?.currentTrip ||
+              state?.currentBudget ||
+              state?.currentHotels
+            ) {
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to fetch agent state:", err);
+        }
+      }
+
+      // Fallback: Extract trip/budget/hotel data from loaded messages
       const allText = loadedMessages
         .filter((m) => m.role === "assistant")
         .map((m) => m.content)
@@ -587,7 +850,354 @@ export function useAgentChat(): UseAgentChatReturn {
     setBudgetData(null);
     setHotelData(null);
     setRouteData(null);
+    setSelectedHotelIndexes(new Set());
+    setHotelAssignments({});
   }, []);
+
+  const haversineKm = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const parsePriceRange = (priceRange: string): number => {
+    if (!priceRange) return Infinity;
+    const cleaned = priceRange.replace(/[฿,$,\s]/g, "").replace(/[^\d.-]/g, "");
+    const parts = cleaned
+      .split("-")
+      .map((p) => parseFloat(p.trim()))
+      .filter((n) => !isNaN(n) && isFinite(n));
+    if (parts.length === 0) return Infinity;
+    if (parts.length === 1) return parts[0];
+    return (parts[0] + parts[1]) / 2;
+  };
+
+  const computeDayCentroids = (
+    tripDays: PlannedTrip["days"],
+  ): Map<number, { lat: number; lng: number }> => {
+    const centroids = new Map<number, { lat: number; lng: number }>();
+    for (const day of tripDays) {
+      const placesWithCoords = day.items.filter(
+        (i) => i.latitude && i.longitude,
+      );
+      if (placesWithCoords.length === 0) continue;
+      const lat =
+        placesWithCoords.reduce((sum, i) => sum + (i.latitude ?? 0), 0) /
+        placesWithCoords.length;
+      const lng =
+        placesWithCoords.reduce((sum, i) => sum + (i.longitude ?? 0), 0) /
+        placesWithCoords.length;
+      centroids.set(day.day, { lat, lng });
+    }
+    return centroids;
+  };
+
+  const autoAssignHotels = useCallback(
+    (
+      selectedIndexes: Set<number>,
+      trip: PlannedTrip,
+      hotels: HotelData["hotels"],
+    ) => {
+      if (selectedIndexes.size === 0 || !trip.days || trip.days.length === 0) {
+        setHotelAssignments({});
+        return;
+      }
+
+      const centroids = computeDayCentroids(trip.days);
+      const numNights = trip.days.length - 1;
+
+      const assignments: Record<number, number> = {};
+
+      for (let night = 1; night <= numNights; night++) {
+        const centroid = centroids.get(night);
+        if (!centroid) {
+          assignments[night] = Array.from(selectedIndexes)[0];
+          continue;
+        }
+
+        let bestHotelIdx = Array.from(selectedIndexes)[0];
+        let bestDist = Infinity;
+
+        for (const hotelIdx of selectedIndexes) {
+          const hotel = hotels[hotelIdx];
+          if (!hotel) continue;
+          const dist = haversineKm(
+            centroid.lat,
+            centroid.lng,
+            hotel.latitude,
+            hotel.longitude,
+          );
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestHotelIdx = hotelIdx;
+          }
+        }
+
+        assignments[night] = bestHotelIdx;
+      }
+
+      setHotelAssignments(assignments);
+    },
+    [],
+  );
+
+  const onSelectHotel = useCallback((index: number) => {
+    setSelectedHotelIndexes((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
+
+  const onSelectAllHotels = useCallback(() => {
+    if (!hotelData?.hotels) return;
+    const allIndexes = new Set(hotelData.hotels.map((_, idx) => idx));
+    setSelectedHotelIndexes(allIndexes);
+  }, [hotelData]);
+
+  const optimizeHotelAssignments = useCallback(() => {
+    if (!tripData || !hotelData?.hotels || tripData.days.length === 0) return;
+
+    const centroids = computeDayCentroids(tripData.days);
+    const numNights = tripData.days.length - 1;
+
+    if (numNights <= 0 || hotelData.hotels.length === 0) return;
+
+    const allHotels = hotelData.hotels.map((h, idx) => ({
+      ...h,
+      idx,
+    }));
+
+    const avgPrice =
+      allHotels.reduce((sum, h) => {
+        const price = parsePriceRange(h.priceRange);
+        return sum + (price === Infinity ? 0 : price);
+      }, 0) / allHotels.length || 1;
+
+    const assignments: Record<number, number> = {};
+
+    for (let night = 1; night <= numNights; night++) {
+      const centroid = centroids.get(night);
+      const dayIndex = night;
+
+      if (!centroid) {
+        const bestByPrice = allHotels.reduce((best, h) => {
+          const hPrice = parsePriceRange(h.priceRange);
+          const bPrice = parsePriceRange(best.priceRange);
+          return hPrice < bPrice ? h : best;
+        }, allHotels[0]);
+        assignments[night] = bestByPrice.idx;
+        continue;
+      }
+
+      let bestHotel = allHotels[0];
+      let bestScore = -Infinity;
+
+      for (const hotel of allHotels) {
+        const price = parsePriceRange(hotel.priceRange);
+        const priceNorm = price === Infinity ? 1 : price / avgPrice;
+        const priceScore = -priceNorm * 5;
+
+        const distKm = haversineKm(
+          centroid.lat,
+          centroid.lng,
+          hotel.latitude,
+          hotel.longitude,
+        );
+        const distNorm = distKm / 100;
+        const distScore = -distNorm * 4;
+
+        const ratingScore = (hotel.rating || 0) * 1;
+
+        const score = priceScore + distScore + ratingScore;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestHotel = hotel;
+        }
+      }
+
+      assignments[night] = bestHotel.idx;
+    }
+
+    setSelectedHotelIndexes(new Set(allHotels.map((h) => h.idx)));
+    setHotelAssignments(assignments);
+
+    const totalCost = Object.values(assignments).reduce((sum, idx) => {
+      const h = hotelData.hotels[idx];
+      const price = parsePriceRange(h.priceRange);
+      return sum + (price === Infinity ? 0 : price);
+    }, 0);
+
+    if (totalCost > 0) {
+      toast.success(
+        `AI-Optimized: ฿${totalCost.toLocaleString()} total for ${numNights} night(s)`,
+      );
+    }
+  }, [tripData, hotelData]);
+
+  const recalculateBudgetWithHotels = useCallback(
+    (
+      budget: BudgetData,
+      assignments: Record<number, number>,
+      hotels: HotelData["hotels"],
+      totalDays: number,
+    ): BudgetData => {
+      if (!assignments || Object.keys(assignments).length === 0) {
+        return budget;
+      }
+
+      const accommodationCat = budget.categories.find((cat) => {
+        const catIdLower = cat.id.toLowerCase();
+        return (
+          catIdLower.includes("accommodation") ||
+          catIdLower.includes("hotel") ||
+          catIdLower.includes("stay") ||
+          catIdLower.includes("lodging") ||
+          catIdLower.includes("room")
+        );
+      });
+      const accommodationCatId = accommodationCat?.id;
+
+      let totalAccommodationCost = 0;
+      const newHotelExpenses: BudgetExpense[] = [];
+
+      for (const [nightStr, hotelIdx] of Object.entries(assignments)) {
+        const night = parseInt(nightStr);
+        const hotel = hotels[hotelIdx];
+        if (hotel) {
+          const avgPrice = parsePriceRange(hotel.priceRange);
+          if (avgPrice !== Infinity) {
+            totalAccommodationCost += avgPrice;
+
+            const expenseId = `hotel-expense-${night}-${hotelIdx}`;
+
+            newHotelExpenses.push({
+              id: expenseId,
+              name: `${hotel.name} - Night ${night}`,
+              amount: avgPrice,
+              categoryId: accommodationCatId || "accommodation",
+              day: night,
+            });
+          }
+        }
+      }
+
+      const existingNonAccommodationExpenses =
+        (budget.expenses || []).filter(
+          (e) => e && e.id && e.categoryId !== accommodationCatId,
+        ) || [];
+      const allExpenses = [
+        ...existingNonAccommodationExpenses,
+        ...newHotelExpenses,
+      ];
+
+      const updatedCategories = budget.categories.map((cat) => {
+        const catIdLower = cat.id.toLowerCase();
+        if (
+          catIdLower.includes("accommodation") ||
+          catIdLower.includes("hotel") ||
+          catIdLower.includes("stay") ||
+          catIdLower.includes("lodging") ||
+          catIdLower.includes("room")
+        ) {
+          return { ...cat, allocated: totalAccommodationCost };
+        }
+        return cat;
+      });
+
+      return {
+        ...budget,
+        categories: updatedCategories,
+        expenses: allExpenses,
+      };
+    },
+    [],
+  );
+
+  const onAssignHotel = useCallback((night: number, hotelIndex: number) => {
+    setHotelAssignments((prev) => ({
+      ...prev,
+      [night]: hotelIndex,
+    }));
+  }, []);
+
+  const prevAssignmentsRef = useRef<Record<number, number>>({});
+  const prevSelectedHotelsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (hotelData?.hotels && tripData && selectedHotelIndexes.size > 0) {
+      if (
+        prevSelectedHotelsRef.current.size !== selectedHotelIndexes.size ||
+        [...selectedHotelIndexes].some(
+          (idx) => !prevSelectedHotelsRef.current.has(idx),
+        )
+      ) {
+        prevSelectedHotelsRef.current = new Set(selectedHotelIndexes);
+        autoAssignHotels(selectedHotelIndexes, tripData, hotelData.hotels);
+      }
+    }
+  }, [hotelData, selectedHotelIndexes, tripData, autoAssignHotels]);
+
+  useEffect(() => {
+    if (!budgetData || !hotelData || !tripData) return;
+    if (!hotelAssignments || Object.keys(hotelAssignments).length === 0) return;
+
+    const assignmentsKey = JSON.stringify(hotelAssignments);
+    const prevKey = JSON.stringify(prevAssignmentsRef.current);
+
+    if (assignmentsKey !== prevKey) {
+      prevAssignmentsRef.current = { ...hotelAssignments };
+
+      let totalHotelCost = 0;
+      for (const [, hotelIdx] of Object.entries(hotelAssignments)) {
+        const hotel = hotelData.hotels[hotelIdx];
+        if (hotel) {
+          const price = parsePriceRange(hotel.priceRange);
+          if (price !== Infinity) {
+            totalHotelCost += price;
+          }
+        }
+      }
+
+      const updated = recalculateBudgetWithHotels(
+        budgetData,
+        hotelAssignments,
+        hotelData.hotels,
+        tripData.days.length,
+      );
+      setBudgetData(updated);
+
+      if (totalHotelCost > 0) {
+        toast.success(
+          `Budget updated: ฿${totalHotelCost.toLocaleString()} for ${Object.keys(hotelAssignments).length} hotel night(s)`,
+        );
+      }
+    }
+  }, [
+    budgetData,
+    hotelAssignments,
+    hotelData,
+    tripData,
+    recalculateBudgetWithHotels,
+  ]);
 
   return {
     messages,
@@ -597,12 +1207,21 @@ export function useAgentChat(): UseAgentChatReturn {
     budgetData,
     hotelData,
     routeData,
+    routePlanId,
+    selectedHotelIndexes,
+    hotelAssignments,
     setRouteData,
+    setRoutePlanId,
+    fetchRoutePlanById,
     sendMessage,
     stop,
     updateThreadId,
     loadConversation,
     reset,
+    onSelectHotel,
+    onAssignHotel,
+    onSelectAllHotels,
+    optimizeHotelAssignments,
   };
 }
 
