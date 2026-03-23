@@ -454,6 +454,42 @@ export function useAgentChat(): UseAgentChatReturn {
 
               // Process the final 'values' event — contains complete state from all agents
               if (currentEventType === "values") {
+                // Prefer direct state properties from backend (reliable for modifications)
+                // Backend sends currentTrip, currentBudget, currentHotels in values event
+                const currentTrip = data.currentTrip as PlannedTrip | undefined;
+                const currentBudget = data.currentBudget as
+                  | BudgetData
+                  | undefined;
+                const currentHotelsRaw = data.currentHotels as unknown;
+
+                if (
+                  currentTrip &&
+                  Array.isArray(currentTrip.days) &&
+                  currentTrip.days.length > 0
+                ) {
+                  setTripData(currentTrip);
+                }
+                if (currentBudget && typeof currentBudget.total === "number") {
+                  setBudgetData(currentBudget);
+                }
+                if (
+                  currentHotelsRaw &&
+                  typeof currentHotelsRaw === "object" &&
+                  currentHotelsRaw !== null
+                ) {
+                  const hotelsObj = currentHotelsRaw as {
+                    hotels?: HotelItem[];
+                  };
+                  if (
+                    Array.isArray(hotelsObj.hotels) &&
+                    hotelsObj.hotels.length > 0
+                  ) {
+                    setHotelData({ hotels: hotelsObj.hotels });
+                  }
+                }
+
+                // Fallback: parse from AI message content (for initial trip creation)
+                // Only use this if backend didn't send direct state properties
                 const msgs = Array.isArray(data.messages) ? data.messages : [];
                 const allAiText = msgs
                   .filter(
@@ -466,12 +502,22 @@ export function useAgentChat(): UseAgentChatReturn {
                   .join("\n\n");
 
                 if (allAiText) {
-                  const trip = extractTripFromMarkdown(allAiText);
-                  if (trip) setTripData(trip);
-                  const budget = extractBudgetFromMarkdown(allAiText);
-                  if (budget) setBudgetData(budget);
-                  const hotel = extractHotelFromMarkdown(allAiText);
-                  if (hotel) setHotelData(hotel);
+                  // Only parse from markdown if no direct state was provided
+                  if (!currentTrip || !currentTrip.days?.length) {
+                    const trip = extractTripFromMarkdown(allAiText);
+                    if (trip) setTripData(trip);
+                  }
+                  if (!currentBudget) {
+                    const budget = extractBudgetFromMarkdown(allAiText);
+                    if (budget) setBudgetData(budget);
+                  }
+                  if (
+                    !currentHotelsRaw ||
+                    typeof currentHotelsRaw !== "object"
+                  ) {
+                    const hotel = extractHotelFromMarkdown(allAiText);
+                    if (hotel) setHotelData(hotel);
+                  }
                   const route = extractRouteFromMarkdown(allAiText);
                   if (route) setRouteData(route);
 
