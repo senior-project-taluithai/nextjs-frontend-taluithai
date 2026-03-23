@@ -63,6 +63,8 @@ export interface BudgetData {
   categories: BudgetCategory[];
   dailyBudgets?: DailyBudget[];
   expenses?: BudgetExpense[];
+  allocationPercentages?: Record<string, number>;
+  tripType?: string;
 }
 
 export interface HotelPrice {
