@@ -13,8 +13,8 @@ export function TripDayCards({ days }: TripDayCardsProps) {
 
     return (
         <div className="space-y-4 my-3">
-            {days.map((day) => (
-                <div key={day.day}>
+            {days.map((day, dayIndex) => (
+                <div key={`day-${day.day}-${dayIndex}`}>
                     <h4 className="text-sm font-semibold text-primary mb-2 flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5" />
                         Day {day.day}
@@ -23,7 +23,7 @@ export function TripDayCards({ days }: TripDayCardsProps) {
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
                         {day.items.map((item, idx) => (
                             <div
-                                key={item.id || idx}
+                                key={`item-${item.id ?? "no-id"}-${idx}`}
                                 className="flex-none w-44 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden"
                             >
                                 {/* Thumbnail */}

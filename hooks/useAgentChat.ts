@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 export interface ChatMessage {
   id: string;
@@ -173,6 +174,8 @@ interface UseAgentChatReturn {
   hotelData: HotelData | null;
   routeData: RouteData | null;
   routePlanId: number | null;
+  selectedHotelIndexes: Set<number>;
+  hotelAssignments: Record<number, number>;
   setRouteData: (data: RouteData | null) => void;
   setRoutePlanId: (id: number | null) => void;
   fetchRoutePlanById: (planId: number) => Promise<RouteData | null>;
@@ -181,6 +184,10 @@ interface UseAgentChatReturn {
   updateThreadId: (id: string | null) => void;
   loadConversation: (messages: ChatMessage[], threadId: string | null) => void;
   reset: () => void;
+  onSelectHotel: (index: number) => void;
+  onAssignHotel: (night: number, hotelIndex: number) => void;
+  onSelectAllHotels: () => void;
+  optimizeHotelAssignments: () => void;
 }
 
 let messageCounter = 0;
@@ -229,9 +236,17 @@ export function useAgentChat(): UseAgentChatReturn {
   const [threadId, setThreadIdState] = useState<string | null>(null);
   const [tripData, setTripData] = useState<PlannedTrip | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const budgetDataRef = useRef(budgetData);
+  budgetDataRef.current = budgetData;
   const [hotelData, setHotelData] = useState<HotelData | null>(null);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [routePlanId, setRoutePlanIdState] = useState<number | null>(null);
+  const [selectedHotelIndexes, setSelectedHotelIndexes] = useState<Set<number>>(
+    new Set(),
+  );
+  const [hotelAssignments, setHotelAssignments] = useState<
+    Record<number, number>
+  >({});
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchRoutePlanById = useCallback(
@@ -708,7 +723,354 @@ export function useAgentChat(): UseAgentChatReturn {
     setBudgetData(null);
     setHotelData(null);
     setRouteData(null);
+    setSelectedHotelIndexes(new Set());
+    setHotelAssignments({});
   }, []);
+
+  const haversineKm = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const parsePriceRange = (priceRange: string): number => {
+    if (!priceRange) return Infinity;
+    const cleaned = priceRange.replace(/[฿,$,\s]/g, "").replace(/[^\d.-]/g, "");
+    const parts = cleaned
+      .split("-")
+      .map((p) => parseFloat(p.trim()))
+      .filter((n) => !isNaN(n) && isFinite(n));
+    if (parts.length === 0) return Infinity;
+    if (parts.length === 1) return parts[0];
+    return (parts[0] + parts[1]) / 2;
+  };
+
+  const computeDayCentroids = (
+    tripDays: PlannedTrip["days"],
+  ): Map<number, { lat: number; lng: number }> => {
+    const centroids = new Map<number, { lat: number; lng: number }>();
+    for (const day of tripDays) {
+      const placesWithCoords = day.items.filter(
+        (i) => i.latitude && i.longitude,
+      );
+      if (placesWithCoords.length === 0) continue;
+      const lat =
+        placesWithCoords.reduce((sum, i) => sum + (i.latitude ?? 0), 0) /
+        placesWithCoords.length;
+      const lng =
+        placesWithCoords.reduce((sum, i) => sum + (i.longitude ?? 0), 0) /
+        placesWithCoords.length;
+      centroids.set(day.day, { lat, lng });
+    }
+    return centroids;
+  };
+
+  const autoAssignHotels = useCallback(
+    (
+      selectedIndexes: Set<number>,
+      trip: PlannedTrip,
+      hotels: HotelData["hotels"],
+    ) => {
+      if (selectedIndexes.size === 0 || !trip.days || trip.days.length === 0) {
+        setHotelAssignments({});
+        return;
+      }
+
+      const centroids = computeDayCentroids(trip.days);
+      const numNights = trip.days.length - 1;
+
+      const assignments: Record<number, number> = {};
+
+      for (let night = 1; night <= numNights; night++) {
+        const centroid = centroids.get(night);
+        if (!centroid) {
+          assignments[night] = Array.from(selectedIndexes)[0];
+          continue;
+        }
+
+        let bestHotelIdx = Array.from(selectedIndexes)[0];
+        let bestDist = Infinity;
+
+        for (const hotelIdx of selectedIndexes) {
+          const hotel = hotels[hotelIdx];
+          if (!hotel) continue;
+          const dist = haversineKm(
+            centroid.lat,
+            centroid.lng,
+            hotel.latitude,
+            hotel.longitude,
+          );
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestHotelIdx = hotelIdx;
+          }
+        }
+
+        assignments[night] = bestHotelIdx;
+      }
+
+      setHotelAssignments(assignments);
+    },
+    [],
+  );
+
+  const onSelectHotel = useCallback((index: number) => {
+    setSelectedHotelIndexes((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
+
+  const onSelectAllHotels = useCallback(() => {
+    if (!hotelData?.hotels) return;
+    const allIndexes = new Set(hotelData.hotels.map((_, idx) => idx));
+    setSelectedHotelIndexes(allIndexes);
+  }, [hotelData]);
+
+  const optimizeHotelAssignments = useCallback(() => {
+    if (!tripData || !hotelData?.hotels || tripData.days.length === 0) return;
+
+    const centroids = computeDayCentroids(tripData.days);
+    const numNights = tripData.days.length - 1;
+
+    if (numNights <= 0 || hotelData.hotels.length === 0) return;
+
+    const allHotels = hotelData.hotels.map((h, idx) => ({
+      ...h,
+      idx,
+    }));
+
+    const avgPrice =
+      allHotels.reduce((sum, h) => {
+        const price = parsePriceRange(h.priceRange);
+        return sum + (price === Infinity ? 0 : price);
+      }, 0) / allHotels.length || 1;
+
+    const assignments: Record<number, number> = {};
+
+    for (let night = 1; night <= numNights; night++) {
+      const centroid = centroids.get(night);
+      const dayIndex = night;
+
+      if (!centroid) {
+        const bestByPrice = allHotels.reduce((best, h) => {
+          const hPrice = parsePriceRange(h.priceRange);
+          const bPrice = parsePriceRange(best.priceRange);
+          return hPrice < bPrice ? h : best;
+        }, allHotels[0]);
+        assignments[night] = bestByPrice.idx;
+        continue;
+      }
+
+      let bestHotel = allHotels[0];
+      let bestScore = -Infinity;
+
+      for (const hotel of allHotels) {
+        const price = parsePriceRange(hotel.priceRange);
+        const priceNorm = price === Infinity ? 1 : price / avgPrice;
+        const priceScore = -priceNorm * 5;
+
+        const distKm = haversineKm(
+          centroid.lat,
+          centroid.lng,
+          hotel.latitude,
+          hotel.longitude,
+        );
+        const distNorm = distKm / 100;
+        const distScore = -distNorm * 4;
+
+        const ratingScore = (hotel.rating || 0) * 1;
+
+        const score = priceScore + distScore + ratingScore;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestHotel = hotel;
+        }
+      }
+
+      assignments[night] = bestHotel.idx;
+    }
+
+    setSelectedHotelIndexes(new Set(allHotels.map((h) => h.idx)));
+    setHotelAssignments(assignments);
+
+    const totalCost = Object.values(assignments).reduce((sum, idx) => {
+      const h = hotelData.hotels[idx];
+      const price = parsePriceRange(h.priceRange);
+      return sum + (price === Infinity ? 0 : price);
+    }, 0);
+
+    if (totalCost > 0) {
+      toast.success(
+        `AI-Optimized: ฿${totalCost.toLocaleString()} total for ${numNights} night(s)`,
+      );
+    }
+  }, [tripData, hotelData]);
+
+  const recalculateBudgetWithHotels = useCallback(
+    (
+      budget: BudgetData,
+      assignments: Record<number, number>,
+      hotels: HotelData["hotels"],
+      totalDays: number,
+    ): BudgetData => {
+      if (!assignments || Object.keys(assignments).length === 0) {
+        return budget;
+      }
+
+      const accommodationCat = budget.categories.find((cat) => {
+        const catIdLower = cat.id.toLowerCase();
+        return (
+          catIdLower.includes("accommodation") ||
+          catIdLower.includes("hotel") ||
+          catIdLower.includes("stay") ||
+          catIdLower.includes("lodging") ||
+          catIdLower.includes("room")
+        );
+      });
+      const accommodationCatId = accommodationCat?.id;
+
+      let totalAccommodationCost = 0;
+      const newHotelExpenses: BudgetExpense[] = [];
+
+      for (const [nightStr, hotelIdx] of Object.entries(assignments)) {
+        const night = parseInt(nightStr);
+        const hotel = hotels[hotelIdx];
+        if (hotel) {
+          const avgPrice = parsePriceRange(hotel.priceRange);
+          if (avgPrice !== Infinity) {
+            totalAccommodationCost += avgPrice;
+
+            const expenseId = `hotel-expense-${night}-${hotelIdx}`;
+
+            newHotelExpenses.push({
+              id: expenseId,
+              name: `${hotel.name} - Night ${night}`,
+              amount: avgPrice,
+              categoryId: accommodationCatId || "accommodation",
+              day: night,
+            });
+          }
+        }
+      }
+
+      const existingNonAccommodationExpenses =
+        (budget.expenses || []).filter(
+          (e) => e && e.id && e.categoryId !== accommodationCatId,
+        ) || [];
+      const allExpenses = [
+        ...existingNonAccommodationExpenses,
+        ...newHotelExpenses,
+      ];
+
+      const updatedCategories = budget.categories.map((cat) => {
+        const catIdLower = cat.id.toLowerCase();
+        if (
+          catIdLower.includes("accommodation") ||
+          catIdLower.includes("hotel") ||
+          catIdLower.includes("stay") ||
+          catIdLower.includes("lodging") ||
+          catIdLower.includes("room")
+        ) {
+          return { ...cat, allocated: totalAccommodationCost };
+        }
+        return cat;
+      });
+
+      return {
+        ...budget,
+        categories: updatedCategories,
+        expenses: allExpenses,
+      };
+    },
+    [],
+  );
+
+  const onAssignHotel = useCallback((night: number, hotelIndex: number) => {
+    setHotelAssignments((prev) => ({
+      ...prev,
+      [night]: hotelIndex,
+    }));
+  }, []);
+
+  const prevAssignmentsRef = useRef<Record<number, number>>({});
+  const prevSelectedHotelsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (hotelData?.hotels && tripData && selectedHotelIndexes.size > 0) {
+      if (
+        prevSelectedHotelsRef.current.size !== selectedHotelIndexes.size ||
+        [...selectedHotelIndexes].some(
+          (idx) => !prevSelectedHotelsRef.current.has(idx),
+        )
+      ) {
+        prevSelectedHotelsRef.current = new Set(selectedHotelIndexes);
+        autoAssignHotels(selectedHotelIndexes, tripData, hotelData.hotels);
+      }
+    }
+  }, [hotelData, selectedHotelIndexes, tripData, autoAssignHotels]);
+
+  useEffect(() => {
+    if (!budgetData || !hotelData || !tripData) return;
+    if (!hotelAssignments || Object.keys(hotelAssignments).length === 0) return;
+
+    const assignmentsKey = JSON.stringify(hotelAssignments);
+    const prevKey = JSON.stringify(prevAssignmentsRef.current);
+
+    if (assignmentsKey !== prevKey) {
+      prevAssignmentsRef.current = { ...hotelAssignments };
+
+      let totalHotelCost = 0;
+      for (const [, hotelIdx] of Object.entries(hotelAssignments)) {
+        const hotel = hotelData.hotels[hotelIdx];
+        if (hotel) {
+          const price = parsePriceRange(hotel.priceRange);
+          if (price !== Infinity) {
+            totalHotelCost += price;
+          }
+        }
+      }
+
+      const updated = recalculateBudgetWithHotels(
+        budgetData,
+        hotelAssignments,
+        hotelData.hotels,
+        tripData.days.length,
+      );
+      setBudgetData(updated);
+
+      if (totalHotelCost > 0) {
+        toast.success(
+          `Budget updated: ฿${totalHotelCost.toLocaleString()} for ${Object.keys(hotelAssignments).length} hotel night(s)`,
+        );
+      }
+    }
+  }, [
+    budgetData,
+    hotelAssignments,
+    hotelData,
+    tripData,
+    recalculateBudgetWithHotels,
+  ]);
 
   return {
     messages,
@@ -719,6 +1081,8 @@ export function useAgentChat(): UseAgentChatReturn {
     hotelData,
     routeData,
     routePlanId,
+    selectedHotelIndexes,
+    hotelAssignments,
     setRouteData,
     setRoutePlanId,
     fetchRoutePlanById,
@@ -727,6 +1091,10 @@ export function useAgentChat(): UseAgentChatReturn {
     updateThreadId,
     loadConversation,
     reset,
+    onSelectHotel,
+    onAssignHotel,
+    onSelectAllHotels,
+    optimizeHotelAssignments,
   };
 }
 

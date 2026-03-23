@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { BackgroundMap } from "@/components/ai-planner/background-map";
 import { TripResultPanel } from "@/components/ai-planner/trip-result-panel";
 import { ChatHistorySidebar } from "@/components/ai-planner/chat-history-sidebar";
+import { RouteLegend } from "@/components/my-trip/route-legend";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
@@ -264,6 +265,8 @@ export default function AIPlannerPage() {
     hotelData,
     routeData,
     routePlanId,
+    selectedHotelIndexes,
+    hotelAssignments,
     setRouteData,
     setRoutePlanId,
     fetchRoutePlanById,
@@ -272,6 +275,9 @@ export default function AIPlannerPage() {
     updateThreadId,
     loadConversation,
     reset,
+    onSelectHotel,
+    onAssignHotel,
+    optimizeHotelAssignments,
   } = useAgentChat();
 
   const [trip, setTrip] = useState<PlannedTrip>({
@@ -284,6 +290,9 @@ export default function AIPlannerPage() {
   const [activeMobilePanel, setActiveMobilePanel] = useState<
     "trip" | "map" | "chat"
   >("chat");
+
+  const hotelAssignmentsRef = useRef(hotelAssignments);
+  hotelAssignmentsRef.current = hotelAssignments;
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -320,26 +329,18 @@ export default function AIPlannerPage() {
 
   // Debounce ref for route planner
   const routePlannerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isFetchingRouteRef = useRef(false);
+  // Debounce ref for hotel updates
+  const hotelUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-call route planner when tripData is available with hotel data from any source
   useEffect(() => {
-    // Clear any pending debounce
     if (routePlannerTimeoutRef.current) {
       clearTimeout(routePlannerTimeoutRef.current);
     }
 
-    // Debounce: wait 500ms before calling route planner
     routePlannerTimeoutRef.current = setTimeout(() => {
-      // Guard: prevent concurrent fetches
-      if (isFetchingRouteRef.current) {
-        console.log("Route planner: already fetching, skipping");
-        return;
-      }
-
       if (!tripData) return;
 
-      // Build hotels from hotelData (agent hotel search) or from routeData agent stops
       let hotels: {
         name: string;
         latitude: number;
@@ -388,7 +389,7 @@ export default function AIPlannerPage() {
 
       if (places.length === 0) return;
 
-      isFetchingRouteRef.current = true;
+      console.log("[RoutePlanner] Fetching new route plan...");
 
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -407,16 +408,14 @@ export default function AIPlannerPage() {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {
+            console.log("[RoutePlanner] Received new route data:", data);
             if (data.planId) {
               setRoutePlanId(data.planId);
             }
             setRouteData(data);
           }
         })
-        .catch((err) => console.warn("Route planner failed:", err))
-        .finally(() => {
-          isFetchingRouteRef.current = false;
-        });
+        .catch((err) => console.warn("Route planner failed:", err));
     }, 500);
 
     return () => {
@@ -426,6 +425,65 @@ export default function AIPlannerPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData, hotelData]);
+
+  // Handle hotel assignment changes with debounced PATCH call
+  useEffect(() => {
+    if (hotelUpdateTimeoutRef.current) {
+      clearTimeout(hotelUpdateTimeoutRef.current);
+    }
+
+    hotelUpdateTimeoutRef.current = setTimeout(() => {
+      const currentHotelAssignments = hotelAssignmentsRef.current;
+      if (
+        !routePlanId ||
+        !currentHotelAssignments ||
+        Object.keys(currentHotelAssignments).length === 0 ||
+        !hotelData
+      ) {
+        return;
+      }
+
+      const hotelOverrides = Object.entries(currentHotelAssignments).map(
+        ([night, hotelIdx]) => ({
+          night: parseInt(night),
+          hotel_name: hotelData!.hotels[hotelIdx].name,
+          latitude: hotelData!.hotels[hotelIdx].latitude,
+          longitude: hotelData!.hotels[hotelIdx].longitude,
+        }),
+      );
+
+      console.log(
+        "[RoutePlanner] Updating hotel assignments via PATCH:",
+        hotelOverrides,
+      );
+
+      const BACKEND_URL =
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      fetch(`${BACKEND_URL}/route-planner/plan/${routePlanId}/hotels`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          hotel_overrides: hotelOverrides,
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            console.log("[RoutePlanner] Received updated route data:", data);
+            setRouteData(data);
+          }
+        })
+        .catch((err) => console.warn("Hotel update failed:", err));
+    }, 300);
+
+    return () => {
+      if (hotelUpdateTimeoutRef.current) {
+        clearTimeout(hotelUpdateTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelAssignments, routePlanId, hotelData]);
 
   // Load route plan from DB if we have a planId but no routeData
   useEffect(() => {
@@ -469,6 +527,8 @@ export default function AIPlannerPage() {
       startDate.setDate(startDate.getDate() + 1);
       const endDate = addDays(startDate, trip.days.length || 1);
 
+      console.log('[DEBUG] Saving trip with budget:', JSON.stringify(budgetData, null, 2));
+
       const newTrip = await createTripMutation.mutateAsync({
         name: trip.name || "My Ai Trip",
         start_date: format(startDate, "yyyy-MM-dd"),
@@ -477,6 +537,8 @@ export default function AIPlannerPage() {
         status: "draft",
         budget: budgetData,
       });
+
+      console.log('[DEBUG] Created trip response:', JSON.stringify(newTrip.budget, null, 2));
 
       const tripId = newTrip.id;
 
@@ -616,6 +678,10 @@ export default function AIPlannerPage() {
         coordinates: day.geometry!.coordinates,
       })) || [];
 
+  const uniqueDays = [...new Set(routeGeometries.map((r) => r.day))].sort(
+    (a, b) => a - b,
+  );
+
   return (
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
       {/* Trip Result Panel (left) - hidden on mobile unless active */}
@@ -635,6 +701,11 @@ export default function AIPlannerPage() {
           budgetData={budgetData}
           hotelData={hotelData}
           routeData={routeData}
+          selectedHotelIndexes={selectedHotelIndexes}
+          onSelectHotel={onSelectHotel}
+          hotelAssignments={hotelAssignments}
+          onAssignHotel={onAssignHotel}
+          onOptimizeHotels={optimizeHotelAssignments}
           onConfirm={handleConfirmTrip}
           isConfirming={isConfirming}
         />
@@ -658,7 +729,13 @@ export default function AIPlannerPage() {
               days={trip.days}
               budget={trip.budget}
               budgetData={budgetData}
+              hotelData={hotelData}
               routeData={routeData}
+              selectedHotelIndexes={selectedHotelIndexes}
+              onSelectHotel={onSelectHotel}
+              hotelAssignments={hotelAssignments}
+              onAssignHotel={onAssignHotel}
+              onOptimizeHotels={optimizeHotelAssignments}
               onConfirm={handleConfirmTrip}
               isConfirming={isConfirming}
             />
@@ -671,6 +748,7 @@ export default function AIPlannerPage() {
         <div className="absolute inset-0">
           <BackgroundMap items={mapItems} routeGeometries={routeGeometries} />
         </div>
+        <RouteLegend days={uniqueDays} />
       </div>
 
       {/* Chat Panel (right) - full width on mobile */}
@@ -747,139 +825,142 @@ export default function AIPlannerPage() {
                 const isCurrentlyStreamingMsg =
                   isStreaming && msg === messages[messages.length - 1];
                 if (isCurrentlyStreamingMsg) return true;
-                const cleaned = msg.content
-                  ? stripJsonBlocks(msg.content)
-                  : "";
-                return cleaned.trim().length > 0 || (msg.toolCalls && msg.toolCalls.length > 0);
+                const cleaned = msg.content ? stripJsonBlocks(msg.content) : "";
+                return (
+                  cleaned.trim().length > 0 ||
+                  (msg.toolCalls && msg.toolCalls.length > 0)
+                );
               })
               .map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
-              >
-                {msg.role === "user" ? (
-                  <>
-                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
-                      <svg
-                        className="w-3.5 h-3.5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                    <div className="max-w-[85%] relative">
-                      <div
-                        className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
-                        }}
-                      >
-                        <p className="text-xs leading-relaxed whitespace-pre-wrap">
-                          {msg.content}
-                        </p>
+                <div
+                  key={msg.id}
+                  className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
+                >
+                  {msg.role === "user" ? (
+                    <>
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
+                        <svg
+                          className="w-3.5 h-3.5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
-                      <Bot className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <div className="flex-1 max-w-[calc(100%-2rem)]">
-                      <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
-                        {(() => {
-                          const isCurrentlyStreaming =
-                            isStreaming &&
-                            msg === messages[messages.length - 1];
-                          const cleanText = msg.content
-                            ? stripJsonBlocks(msg.content)
-                            : "";
-                          return (
-                            <div className="space-y-2">
-                              {/* Tool calls */}
-                              {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                <div className="space-y-2">
-                                  {msg.toolCalls.map((tc: ToolCall) => (
-                                    <ToolCallDisplay
-                                      key={tc.id}
-                                      toolCall={tc}
-                                    />
-                                  ))}
-                                </div>
-                              )}
+                      <div className="max-w-[85%] relative">
+                        <div
+                          className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
+                          }}
+                        >
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
+                        <Bot className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <div className="flex-1 max-w-[calc(100%-2rem)]">
+                        <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+                          {(() => {
+                            const isCurrentlyStreaming =
+                              isStreaming &&
+                              msg === messages[messages.length - 1];
+                            const cleanText = msg.content
+                              ? stripJsonBlocks(msg.content)
+                              : "";
+                            return (
+                              <div className="space-y-2">
+                                {/* Tool calls */}
+                                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                  <div className="space-y-2">
+                                    {msg.toolCalls.map((tc: ToolCall) => (
+                                      <ToolCallDisplay
+                                        key={tc.id}
+                                        toolCall={tc}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
 
-                              {isCurrentlyStreaming ? (
-                                !cleanText && !msg.toolCalls?.length ? (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Loader size={14} />
-                                    <span className="text-xs">Thinking...</span>
-                                  </div>
-                                ) : msg.toolCalls?.length ? (
-                                  <div className="flex items-center gap-2 text-muted-foreground mt-2">
-                                    <Loader size={14} />
-                                    <span className="text-xs">
-                                      Processing...
-                                    </span>
-                                  </div>
+                                {isCurrentlyStreaming ? (
+                                  !cleanText && !msg.toolCalls?.length ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Thinking...
+                                      </span>
+                                    </div>
+                                  ) : msg.toolCalls?.length ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Processing...
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader size={14} />
+                                      <span className="text-xs">
+                                        Writing response...
+                                      </span>
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Loader size={14} />
-                                    <span className="text-xs">
-                                      Writing response...
-                                    </span>
-                                  </div>
-                                )
-                              ) : (
-                                /* Done streaming */
-                                (() => {
-                                  const sanitized = cleanText
-                                    ? sanitizeMarkdownTables(cleanText)
-                                    : "";
-                                  const isLatest =
-                                    msg === messages[messages.length - 1];
-                                  return (
-                                    <>
-                                      {sanitized ? (
-                                        isLatest ? (
-                                          <div className="whitespace-pre-wrap">
-                                            <TypewriterMessage
-                                              text={sanitized}
-                                            />
-                                          </div>
-                                        ) : (
-                                          <div className="whitespace-pre-wrap">
-                                            <MessageResponse>
-                                              {sanitized}
-                                            </MessageResponse>
-                                          </div>
-                                        )
-                                      ) : null}
-                                      {trip.days.length > 0 && isLatest && (
-                                        <TripDayCards days={trip.days} />
-                                      )}
-                                    </>
-                                  );
-                                })()
-                              )}
-                            </div>
-                          );
-                        })()}
+                                  /* Done streaming */
+                                  (() => {
+                                    const sanitized = cleanText
+                                      ? sanitizeMarkdownTables(cleanText)
+                                      : "";
+                                    const isLatest =
+                                      msg === messages[messages.length - 1];
+                                    return (
+                                      <>
+                                        {sanitized ? (
+                                          isLatest ? (
+                                            <div className="whitespace-pre-wrap">
+                                              <TypewriterMessage
+                                                text={sanitized}
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="whitespace-pre-wrap">
+                                              <MessageResponse>
+                                                {sanitized}
+                                              </MessageResponse>
+                                            </div>
+                                          )
+                                        ) : null}
+                                        {trip.days.length > 0 && isLatest && (
+                                          <TripDayCards days={trip.days} />
+                                        )}
+                                      </>
+                                    );
+                                  })()
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
+                    </>
+                  )}
+                </div>
+              ))
           )}
           {/* Add spacer at bottom for scrolling */}
           <div className="h-4" />

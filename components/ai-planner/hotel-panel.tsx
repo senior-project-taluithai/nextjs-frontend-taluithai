@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useState as useStateImport } from "react";
 import {
   Star,
   MapPin,
@@ -8,6 +8,8 @@ import {
   Hotel,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Check,
   Loader2,
   Wifi,
   Waves,
@@ -18,12 +20,19 @@ import {
   Utensils,
   Shield,
   Wine,
+  Sparkles,
 } from "lucide-react";
 import type { HotelData, HotelItem } from "@/hooks/useAgentChat";
 import { api } from "@/lib/api-client";
 
 interface HotelPanelProps {
   data?: HotelData | null;
+  selectedIndexes?: Set<number>;
+  onSelectHotel?: (index: number) => void;
+  tripDays?: number;
+  hotelAssignments?: Record<number, number>;
+  onAssignHotel?: (night: number, hotelIndex: number) => void;
+  onOptimizeHotels?: () => void;
 }
 
 async function getFullBookingUrl(
@@ -161,9 +170,21 @@ function AmenityBadge({ amenity }: { amenity: string }) {
   );
 }
 
-function HotelCard({ hotel }: { hotel: HotelItem }) {
+function HotelCard({
+  hotel,
+  isSelected,
+  onSelect,
+  assignedNights,
+}: {
+  hotel: HotelItem;
+  isSelected?: boolean;
+  onSelect?: () => void;
+  assignedNights?: number[];
+}) {
   const [isLoadingUrl, setIsLoadingUrl] = useState<string | null>(null);
-  const [lookedUpBookingUrl, setLookedUpBookingUrl] = useState<string | null>(null);
+  const [lookedUpBookingUrl, setLookedUpBookingUrl] = useState<string | null>(
+    null,
+  );
   const allImages = [
     ...(hotel.imageUrls || []),
     ...(hotel.thumbnail ? [hotel.thumbnail] : []),
@@ -219,15 +240,28 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+    <div
+      className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden hover:shadow-md transition-shadow ${
+        isSelected ? "border-emerald-300 bg-emerald-50/20" : "border-gray-100"
+      }`}
+    >
       <HotelImageCarousel images={allImages} name={hotel.name} />
 
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">
-              {hotel.name}
-            </h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">
+                {hotel.name}
+              </h4>
+              {isSelected && assignedNights && assignedNights.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                  <Check className="w-3 h-3" />
+                  {assignedNights.length} night
+                  {assignedNights.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
             {hotel.address && (
               <div className="flex items-start gap-1 mt-1">
                 <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
@@ -328,8 +362,8 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
           </div>
         )}
 
-        {!hasPrices && (
-          effectiveBookingUrl ? (
+        {!hasPrices &&
+          (effectiveBookingUrl ? (
             <button
               onClick={(e) => handleBookClick(e, effectiveBookingUrl)}
               className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors mb-3"
@@ -349,8 +383,25 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
                 <>Find Booking URL</>
               )}
             </button>
-          )
-        )}
+          ))}
+
+        <button
+          onClick={onSelect}
+          className={`flex items-center justify-center gap-2 w-full py-2 ${
+            isSelected
+              ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300"
+              : "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200"
+          } text-xs font-semibold rounded-xl transition-colors`}
+        >
+          {isSelected ? (
+            <>
+              <Star className="w-3.5 h-3.5 fill-emerald-400" />
+              Selected
+            </>
+          ) : (
+            "Select Hotel"
+          )}
+        </button>
 
         {hotel.website &&
           !hotel.website.includes("/url?sa=") &&
@@ -370,7 +421,15 @@ function HotelCard({ hotel }: { hotel: HotelItem }) {
   );
 }
 
-export function HotelPanel({ data }: HotelPanelProps) {
+export function HotelPanel({
+  data,
+  selectedIndexes,
+  onSelectHotel,
+  tripDays,
+  hotelAssignments,
+  onAssignHotel,
+  onOptimizeHotels,
+}: HotelPanelProps) {
   if (!data || data.hotels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 text-center bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl border border-dashed border-gray-200 mt-4 mx-3">
@@ -386,6 +445,19 @@ export function HotelPanel({ data }: HotelPanelProps) {
       </div>
     );
   }
+
+  const numNights = tripDays ? tripDays - 1 : 0;
+  const selectedHotelsList = Array.from(selectedIndexes || []);
+
+  const getAssignedNightsForHotel = (hotelIdx: number): number[] => {
+    const nights: number[] = [];
+    for (const [night, idx] of Object.entries(hotelAssignments || {})) {
+      if (idx === hotelIdx) {
+        nights.push(parseInt(night));
+      }
+    }
+    return nights.sort((a, b) => a - b);
+  };
 
   return (
     <div className="px-3 py-4 space-y-4">
@@ -404,10 +476,100 @@ export function HotelPanel({ data }: HotelPanelProps) {
             </p>
           </div>
         </div>
+        {onOptimizeHotels && (
+          <div className="relative group">
+            <button
+              onClick={onOptimizeHotels}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white text-xs font-medium rounded-lg shadow-sm shadow-purple-500/20 transition-all hover:shadow-md hover:shadow-purple-500/30"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              AI-Optimize
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+              <p className="font-semibold mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                AI-Optimize Hotels
+              </p>
+              <p className="text-gray-300 leading-relaxed">
+                Automatically selects the best hotel for each night based on:
+              </p>
+              <ul className="mt-1.5 space-y-1 text-gray-300">
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Lowest price (50% weight)
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                  Closest to activities (40% weight)
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  Highest rating (10% weight)
+                </li>
+              </ul>
+              <div className="absolute -top-1.5 right-4 w-3 h-3 bg-gray-900 rotate-45"></div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {numNights > 1 && selectedHotelsList.length > 0 && (
+        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+          <div className="flex items-center gap-2 mb-3">
+            <Hotel className="w-4 h-4 text-emerald-600" />
+            <p className="text-xs font-semibold text-gray-700">
+              Hotel Assignments ({numNights} nights)
+            </p>
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: numNights }, (_, i) => i + 1).map((night) => (
+              <div
+                key={night}
+                className="grid grid-cols-[80px_1fr] gap-3 items-center"
+              >
+                <span className="text-xs text-gray-500 font-medium">
+                  Night {night}
+                </span>
+                <div className="relative">
+                  <select
+                    value={hotelAssignments?.[night] ?? ""}
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value);
+                      if (!isNaN(idx) && onAssignHotel) {
+                        onAssignHotel(night, idx);
+                      }
+                    }}
+                    className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-300 cursor-pointer hover:border-gray-300 transition-colors"
+                    title={
+                      data.hotels.find(
+                        (_, idx) => idx === hotelAssignments?.[night],
+                      )?.name
+                    }
+                  >
+                    <option value="">Auto-assign</option>
+                    {data.hotels.map((hotel, idx) => (
+                      <option key={idx} value={idx} title={hotel.name}>
+                        {hotel.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4">
         {data.hotels.map((hotel, idx) => (
-          <HotelCard key={`${hotel.name}-${idx}`} hotel={hotel} />
+          <HotelCard
+            key={`${hotel.name}-${idx}`}
+            hotel={hotel}
+            isSelected={selectedIndexes?.has(idx)}
+            onSelect={() => onSelectHotel?.(idx)}
+            assignedNights={getAssignedNightsForHotel(idx)}
+          />
         ))}
       </div>
     </div>

@@ -28,7 +28,7 @@ export function BackgroundMap({ items, routeGeometries }: BackgroundMapProps) {
     }, [items]);
 
     return (
-        <div className="fixed inset-0 z-0 w-full h-full pointer-events-auto">
+        <div className="fixed inset-0 z-[5] w-full h-full pointer-events-auto">
             <TripMap items={mapItems} routeGeometries={routeGeometries} />
             {/* Overlay to dim map slightly so UI pops */}
             <div className="absolute inset-0 bg-background/5 pointer-events-none" />
