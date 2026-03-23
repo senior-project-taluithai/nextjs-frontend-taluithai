@@ -672,6 +672,29 @@ export function useAgentChat(): UseAgentChatReturn {
                         : m,
                     ),
                   );
+
+                  // Extract hotels from searchHotels tool output instantly
+                  if (toolName === "searchHotels") {
+                    const outputContent =
+                      data?.data?.output?.kwargs?.content ||
+                      data?.data?.output?.content ||
+                      data?.data?.output;
+                    if (typeof outputContent === "string") {
+                      try {
+                        const parsed = JSON.parse(outputContent);
+                        if (
+                          parsed &&
+                          typeof parsed === "object" &&
+                          Array.isArray(parsed.hotels) &&
+                          parsed.hotels.length > 0
+                        ) {
+                          setHotelData({ hotels: parsed.hotels });
+                        }
+                      } catch {
+                        // Not valid JSON, ignore
+                      }
+                    }
+                  }
                 }
               }
             } catch {

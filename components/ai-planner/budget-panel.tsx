@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import {
   PieChart,
   Pie,
@@ -23,6 +23,10 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
+  Pencil,
+  RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -31,19 +35,48 @@ import type {
   BudgetCategory,
   BudgetExpense,
 } from "@/hooks/useAgentChat";
+import {
+  adjustBudgetProportionally,
+  detectTripType,
+  getDefaultAllocations,
+  ALLOCATION_BY_TRIP_TYPE,
+} from "@/lib/budget-utils";
 
 const DEFAULT_CATEGORIES: BudgetCategory[] = [
-  { id: "accommodation", name: "Accommodation", color: "#7C3AED", allocated: 0, spent: 0 },
+  {
+    id: "accommodation",
+    name: "Accommodation",
+    color: "#7C3AED",
+    allocated: 0,
+    spent: 0,
+  },
   { id: "food", name: "Food", color: "#10b981", allocated: 0, spent: 0 },
-  { id: "transport", name: "Transport", color: "#3b82f6", allocated: 0, spent: 0 },
-  { id: "activities", name: "Activities", color: "#f59e0b", allocated: 0, spent: 0 },
+  {
+    id: "transport",
+    name: "Transport",
+    color: "#3b82f6",
+    allocated: 0,
+    spent: 0,
+  },
+  {
+    id: "activities",
+    name: "Activities",
+    color: "#f59e0b",
+    allocated: 0,
+    spent: 0,
+  },
 ];
 
 function normalizeBudgetData(budget: any, daysCount: number): BudgetData {
   if (!budget) {
-    return { total: 0, categories: DEFAULT_CATEGORIES, expenses: [], dailyBudgets: [] };
+    return {
+      total: 0,
+      categories: DEFAULT_CATEGORIES,
+      expenses: [],
+      dailyBudgets: [],
+    };
   }
-  
+
   if (budget.categories && Array.isArray(budget.categories)) {
     return {
       total: budget.total || 0,
@@ -53,22 +86,47 @@ function normalizeBudgetData(budget: any, daysCount: number): BudgetData {
       dailyBudgets: budget.dailyBudgets || [],
     };
   }
-  
+
   const categories: BudgetCategory[] = [
-    { id: "accommodation", name: "Accommodation", color: "#7C3AED", allocated: budget.accommodation || 0, spent: 0 },
-    { id: "food", name: "Food", color: "#10b981", allocated: budget.food || 0, spent: 0 },
-    { id: "transport", name: "Transport", color: "#3b82f6", allocated: budget.transport || 0, spent: 0 },
-    { id: "activities", name: "Activities", color: "#f59e0b", allocated: budget.activities || 0, spent: 0 },
+    {
+      id: "accommodation",
+      name: "Accommodation",
+      color: "#7C3AED",
+      allocated: budget.accommodation || 0,
+      spent: 0,
+    },
+    {
+      id: "food",
+      name: "Food",
+      color: "#10b981",
+      allocated: budget.food || 0,
+      spent: 0,
+    },
+    {
+      id: "transport",
+      name: "Transport",
+      color: "#3b82f6",
+      allocated: budget.transport || 0,
+      spent: 0,
+    },
+    {
+      id: "activities",
+      name: "Activities",
+      color: "#f59e0b",
+      allocated: budget.activities || 0,
+      spent: 0,
+    },
   ];
-  
-  const dailyBudgets = daysCount > 0
-    ? Array.from({ length: daysCount }, (_, i) => ({
-        day: i + 1,
-        allocated: Math.round((budget.total || 0) / daysCount),
-        spent: 0,
-      }))
-    : [];
-  
+
+  const dailyBudgets =
+    daysCount > 0
+      ? Array.from({ length: daysCount }, (_, i) => ({
+          day: i + 1,
+          allocated: Math.round((budget.total || 0) / daysCount),
+          spent: 0,
+        }))
+      : [];
+
   return {
     total: budget.total || 0,
     categories,
@@ -187,9 +245,18 @@ export function BudgetPanel({
     [],
   );
 
+  // Budget editing state
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
+  const [isEditingTotal, setIsEditingTotal] = useState(false);
+  const [editTotalValue, setEditTotalValue] = useState<number>(0);
+
   // Merge normalizedData.expenses and localAddedExpenses, ensuring unique IDs
   // This allows optimistic UI updates without showing duplicates when the backend data refreshes
-  const allExpensesRaw = [...(normalizedData.expenses || []), ...localAddedExpenses];
+  const allExpensesRaw = [
+    ...(normalizedData.expenses || []),
+    ...localAddedExpenses,
+  ];
   const uniqueExpensesMap = new Map<string, BudgetExpense>();
   allExpensesRaw.forEach((exp) => {
     if (exp && exp.id) {
@@ -206,7 +273,11 @@ export function BudgetPanel({
   );
 
   const totalAllocated = useMemo(
-    () => (normalizedData.categories || []).reduce((s, c) => s + (c.allocated || 0), 0),
+    () =>
+      (normalizedData.categories || []).reduce(
+        (s, c) => s + (c.allocated || 0),
+        0,
+      ),
     [normalizedData.categories],
   );
 
@@ -214,9 +285,10 @@ export function BudgetPanel({
   const displaySpentPct = Math.min(spentPct, 100);
   const overBudget = totalSpent > totalBudget && totalBudget > 0;
   const remaining = Math.abs(totalBudget - totalSpent);
-  const suggestedPct = totalBudget > 0 && normalizedData.suggested_spent 
-    ? Math.min((normalizedData.suggested_spent / totalBudget) * 100, 100) 
-    : null;
+  const suggestedPct =
+    totalBudget > 0 && normalizedData.suggested_spent
+      ? Math.min((normalizedData.suggested_spent / totalBudget) * 100, 100)
+      : null;
 
   // Recalculate categories dynamically
   const categories = useMemo(() => {
@@ -278,6 +350,102 @@ export function BudgetPanel({
       }));
   }, [allExpenses, normalizedData.dailyBudgets, totalBudget, daysCount]);
 
+  // Handler: Edit category limit with proportional adjustment
+  const handleCategoryLimitChange = useCallback(
+    (categoryId: string, newAllocated: number) => {
+      if (!onUpdateBudget || !normalizedData.total) return;
+
+      const totalBudget = normalizedData.total;
+      const newPercentage = newAllocated / totalBudget;
+
+      // Get current allocation percentages
+      const currentAllocations: Record<string, number> = {};
+      for (const cat of categories) {
+        currentAllocations[cat.id] = (cat.allocated || 0) / totalBudget;
+      }
+
+      // Adjust proportionally
+      const newAllocations = adjustBudgetProportionally(
+        currentAllocations,
+        categoryId,
+        newPercentage,
+      );
+
+      // Calculate new allocated amounts
+      const updatedCategories = categories.map((cat) => ({
+        ...cat,
+        allocated: Math.round(totalBudget * (newAllocations[cat.id] ?? 0)),
+      }));
+
+      onUpdateBudget({
+        ...normalizedData,
+        categories: updatedCategories,
+        allocationPercentages: newAllocations,
+      });
+    },
+    [categories, normalizedData, onUpdateBudget],
+  );
+
+  // Handler: Edit total budget (amounts change, percentages stay same)
+  const handleTotalBudgetChange = useCallback(
+    (newTotal: number) => {
+      if (!onUpdateBudget) return;
+
+      const percentages =
+        normalizedData.allocationPercentages ??
+        categories.reduce(
+          (acc, cat) => {
+            acc[cat.id] =
+              totalBudget > 0 ? (cat.allocated || 0) / totalBudget : 0;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+
+      // Recalculate all allocated amounts (percentages stay the same)
+      const updatedCategories = categories.map((cat) => ({
+        ...cat,
+        allocated: Math.round(newTotal * (percentages[cat.id] ?? 0)),
+      }));
+
+      // Recalculate daily budgets
+      const updatedDailyBudgets = (normalizedData.dailyBudgets || []).map(
+        (db) => ({
+          ...db,
+          allocated: Math.round(newTotal / daysCount),
+        }),
+      );
+
+      onUpdateBudget({
+        ...normalizedData,
+        total: newTotal,
+        categories: updatedCategories,
+        dailyBudgets: updatedDailyBudgets,
+        allocationPercentages: percentages,
+      });
+    },
+    [categories, normalizedData, totalBudget, daysCount, onUpdateBudget],
+  );
+
+  // Handler: Reset to default allocations based on trip type
+  const handleResetToDefault = useCallback(() => {
+    if (!onUpdateBudget) return;
+
+    const tripType = (normalizedData.tripType as string) ?? "default";
+    const defaultAllocations = getDefaultAllocations(tripType as any);
+
+    const updatedCategories = categories.map((cat) => ({
+      ...cat,
+      allocated: Math.round(totalBudget * (defaultAllocations[cat.id] ?? 0)),
+    }));
+
+    onUpdateBudget({
+      ...normalizedData,
+      categories: updatedCategories,
+      allocationPercentages: defaultAllocations,
+    });
+  }, [categories, normalizedData, totalBudget, onUpdateBudget]);
+
   return (
     <div>
       <div className="px-5 py-5 space-y-5">
@@ -286,9 +454,49 @@ export function BudgetPanel({
           <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Estimated Budget</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ฿{totalBudget.toLocaleString()}
-              </p>
+              {isEditingTotal && onUpdateBudget ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-gray-900">฿</span>
+                  <input
+                    type="number"
+                    value={editTotalValue}
+                    onChange={(e) => setEditTotalValue(Number(e.target.value))}
+                    onBlur={() => {
+                      handleTotalBudgetChange(editTotalValue);
+                      setIsEditingTotal(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleTotalBudgetChange(editTotalValue);
+                        setIsEditingTotal(false);
+                      }
+                      if (e.key === "Escape") {
+                        setIsEditingTotal(false);
+                      }
+                    }}
+                    className="text-2xl font-bold text-gray-900 w-32 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p
+                    className={`text-2xl font-bold text-gray-900 ${onUpdateBudget ? "cursor-pointer hover:text-blue-600" : ""}`}
+                    onClick={() => {
+                      if (onUpdateBudget) {
+                        setIsEditingTotal(true);
+                        setEditTotalValue(totalBudget);
+                      }
+                    }}
+                    title={onUpdateBudget ? "Click to edit budget" : ""}
+                  >
+                    ฿{totalBudget.toLocaleString()}
+                  </p>
+                  {onUpdateBudget && (
+                    <Pencil className="w-4 h-4 text-gray-400" />
+                  )}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-400 mb-0.5">Actual Spent</p>
@@ -577,9 +785,56 @@ export function BudgetPanel({
                         <p className="text-sm font-semibold text-gray-800 truncate">
                           {cat.name}
                         </p>
-                        <p className="text-sm font-bold text-gray-900">
-                          Limit: ฿{(cat.allocated || 0).toLocaleString()}
-                        </p>
+                        {editingCategory === cat.id && onUpdateBudget ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-gray-900">
+                              Limit: ฿
+                            </span>
+                            <input
+                              type="number"
+                              value={editValue}
+                              onChange={(e) =>
+                                setEditValue(Number(e.target.value))
+                              }
+                              onBlur={() => {
+                                handleCategoryLimitChange(cat.id, editValue);
+                                setEditingCategory(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleCategoryLimitChange(cat.id, editValue);
+                                  setEditingCategory(null);
+                                }
+                                if (e.key === "Escape") {
+                                  setEditingCategory(null);
+                                }
+                              }}
+                              className="text-sm font-bold text-gray-900 w-24 border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <p
+                            className={`text-sm font-bold text-gray-900 ${onUpdateBudget ? "cursor-pointer hover:text-blue-600" : ""}`}
+                            onClick={() => {
+                              if (onUpdateBudget) {
+                                setEditingCategory(cat.id);
+                                setEditValue(cat.allocated || 0);
+                              }
+                            }}
+                            title={onUpdateBudget ? "Click to edit limit" : ""}
+                          >
+                            Limit: ฿{(cat.allocated || 0).toLocaleString()}
+                            <span className="text-xs text-gray-400 ml-1">
+                              (
+                              {(
+                                ((cat.allocated || 0) / totalBudget) *
+                                100
+                              ).toFixed(0)}
+                              %)
+                            </span>
+                          </p>
+                        )}
                       </div>
                       <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-1">
                         <div
@@ -616,11 +871,23 @@ export function BudgetPanel({
             <span className="text-xs text-gray-500">
               {categories.length} Categories
             </span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Allocated</span>
-              <span className="text-sm font-bold text-gray-900">
-                ฿{totalAllocated.toLocaleString()}
-              </span>
+            <div className="flex items-center gap-3">
+              {onUpdateBudget && (
+                <button
+                  onClick={handleResetToDefault}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  title="Reset to default allocations based on trip type"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Allocated</span>
+                <span className="text-sm font-bold text-gray-900">
+                  ฿{totalAllocated.toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -849,12 +1116,10 @@ export function BudgetPanel({
                         const Icon = info.icon;
                         const catColor =
                           categories.find((c) => c.id === exp.categoryId)
-                            ?.color ||
-                          info.text.replace("text-", "#") + "00";
+                            ?.color || info.text.replace("text-", "#") + "00";
                         const catName =
                           categories.find((c) => c.id === exp.categoryId)
-                            ?.name ||
-                          info.text.replace("text-", "");
+                            ?.name || info.text.replace("text-", "");
 
                         return (
                           <div

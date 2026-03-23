@@ -99,7 +99,7 @@ export function TripResultPanel({
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white w-full pointer-events-auto">
-      {/* Trip Info Header */}
+      {/* Trip Info Header - only show when there's a trip */}
       {days.length > 0 && (
         <div className="px-4 py-3 border-b border-gray-100 bg-white">
           <div className="flex items-center justify-between">
@@ -119,26 +119,30 @@ export function TripResultPanel({
               </div>
             </div>
           </div>
-          {hasTabs && (
-            <div
-              className={`mt-3 grid gap-2 rounded-lg bg-gray-50 p-1`}
-              style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
-            >
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveView(tab.key)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    activeView === tab.key
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Tabs - show when there's hotel/budget data OR a trip */}
+      {hasTabs && (
+        <div className="px-4 py-3 border-b border-gray-100 bg-white">
+          <div
+            className={`grid gap-2 rounded-lg bg-gray-50 p-1`}
+            style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+          >
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveView(tab.key)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeView === tab.key
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

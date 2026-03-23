@@ -197,6 +197,10 @@ function HotelCard({
 
   const isShortUrl = (url: string) => url.startsWith("/hotel-");
 
+  const hasBookingLink = hotel.bookingUrl && hotel.bookingUrl.length > 0;
+  const hasPriceLinks =
+    hotel.prices && hotel.prices.some((p) => p.link && p.link.length > 0);
+
   const effectiveBookingUrl = hotel.bookingUrl || lookedUpBookingUrl;
 
   const lookupBookingUrl = async () => {
@@ -215,7 +219,8 @@ function HotelCard({
   };
 
   useEffect(() => {
-    if (!hotel.bookingUrl && !lookedUpBookingUrl) {
+    // Skip lookup if booking URL exists, prices have links, or already looked up
+    if (!hasBookingLink && !hasPriceLinks && !lookedUpBookingUrl) {
       lookupBookingUrl();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
