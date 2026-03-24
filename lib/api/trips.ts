@@ -19,8 +19,7 @@ export interface UpdateTripRequest {
 }
 
 async function getAuthToken(): Promise<string | null> {
-  // This will be replaced with actual Clerk auth token retrieval
-  // For now, return null to indicate we're using mock data
+  // Return null to indicate we're using mock data or custom auth
   return null;
 }
 
