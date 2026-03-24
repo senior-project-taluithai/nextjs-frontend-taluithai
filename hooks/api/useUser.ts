@@ -10,3 +10,12 @@ export const useUserProfile = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes cache
   });
 };
+
+export const useUserTravelStats = () => {
+  return useQuery({
+    queryKey: ["me", "travel-stats"],
+    queryFn: () => authService.getTravelStats(),
+    retry: false,
+    staleTime: 1 * 60 * 1000, // 1 minute cache
+  });
+};

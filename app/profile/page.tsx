@@ -11,6 +11,7 @@ import {
   useRecommendationPreferences,
   useUpdateRecommendationPreferencesMutation,
 } from "@/hooks/api/usePreferences";
+import { useUserTravelStats } from "@/hooks/api/useUser";
 import { useCategories } from "@/hooks/api/useCategories";
 import { useChangePasswordMutation } from "@/hooks/api/useAuth";
 import { toast } from "sonner";
@@ -794,6 +795,8 @@ export default function ProfilePage() {
     useRecommendationPreferences();
   const updateRecPrefsMutation = useUpdateRecommendationPreferencesMutation();
 
+  const { data: userStats, isLoading: loadingStats } = useUserTravelStats();
+
   const [selectedPreferenceIds, setSelectedPreferenceIds] = useState<number[]>(
     [],
   );
@@ -997,9 +1000,9 @@ export default function ProfilePage() {
   ];
 
   const STATS = [
-    { label: "Trips", value: 12, icon: MapPin, color: "#10b981" },
-    { label: "Places", value: 47, icon: Compass, color: "#3b82f6" },
-    { label: "Saved", value: 23, icon: Heart, color: "#ef4444" },
+    { label: "Trips", value: userStats?.trips || 0, icon: MapPin, color: "#10b981" },
+    { label: "Places", value: userStats?.places || 0, icon: Compass, color: "#3b82f6" },
+    { label: "Saved", value: userStats?.saved || 0, icon: Heart, color: "#ef4444" },
   ];
 
   if (!user) {
