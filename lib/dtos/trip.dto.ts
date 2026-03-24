@@ -46,3 +46,9 @@ export interface UpdateTripDayItemRequest {
 export interface ReorderItemsRequest {
   items: Array<{ id: number; order: number }>;
 }
+
+export interface SetDayHotelRequest {
+  hotelId: number;
+  checkinTime?: string;
+  checkoutTime?: string;
+}

@@ -8,17 +8,16 @@ import { RouteLegend } from "@/components/my-trip/route-legend";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCreateTrip, useAddTripDayItem } from "@/hooks/api/useTrips";
+import { useSetDayHotel } from "@/hooks/api/useHotels";
 import { useChatConversation, useChatMessages } from "@/hooks/api/useChat";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
 import { MapPin, Bot, Sparkles, Map, X, History } from "lucide-react";
-import { eventService } from "@/lib/services/event";
 
 import {
   useAgentChat,
   type PlannedTrip,
   type ToolCall,
-  type RouteData,
 } from "@/hooks/useAgentChat";
 import { TripDayCards } from "@/components/ai-planner/trip-day-cards";
 import {
@@ -242,6 +241,7 @@ export default function AIPlannerPage() {
   const router = useRouter();
   const createTripMutation = useCreateTrip();
   const addTripItemMutation = useAddTripDayItem();
+  const setDayHotelMutation = useSetDayHotel();
   const { data: provinces } = useProvinces();
 
   const [activeConversationId, setActiveConversationId] = useState<
@@ -346,6 +346,7 @@ export default function AIPlannerPage() {
       if (!tripData) return;
 
       let hotels: {
+        hotel_id?: number;
         name: string;
         latitude: number;
         longitude: number;
@@ -355,6 +356,7 @@ export default function AIPlannerPage() {
 
       if (hotelData?.hotels?.length) {
         hotels = hotelData.hotels.map((h) => ({
+          hotel_id: h.id,
           name: h.name,
           latitude: h.latitude,
           longitude: h.longitude,
@@ -368,6 +370,7 @@ export default function AIPlannerPage() {
           for (const stop of day.route) {
             if (stop.type === "hotel" && stop.lat && stop.lng) {
               hotels.push({
+                hotel_id: stop.hotel_id,
                 name: stop.name,
                 latitude: stop.lat,
                 longitude: stop.lng,
@@ -379,8 +382,11 @@ export default function AIPlannerPage() {
 
       if (hotels.length === 0) return;
 
-      const places = tripData.days.flatMap((d) =>
-        d.items
+      const days = tripData.days.map((d) => ({
+        day: d.day,
+        hotelCheckinTime: d.checkinTime || "14:00",
+        hotelCheckoutTime: d.checkoutTime || "12:00",
+        places: d.items
           .filter((i) => i.latitude && i.longitude)
           .map((i) => ({
             name: i.name,
@@ -388,10 +394,12 @@ export default function AIPlannerPage() {
             longitude: i.longitude!,
             pg_place_id: i.pg_place_id,
             category: i.category,
+            startTime: i.startTime,
+            endTime: i.endTime,
           })),
-      );
+      }));
 
-      if (places.length === 0) return;
+      if (days.every((d) => d.places.length === 0)) return;
 
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -403,7 +411,7 @@ export default function AIPlannerPage() {
           user_location: { latitude: 13.7563, longitude: 100.5018 },
           destination_province: tripData.province || "",
           num_days: tripData.days.length,
-          places,
+          days,
           shortlisted_hotels: hotels,
         }),
       })
@@ -450,6 +458,7 @@ export default function AIPlannerPage() {
           hotel_name: hotelData!.hotels[hotelIdx].name,
           latitude: hotelData!.hotels[hotelIdx].latitude,
           longitude: hotelData!.hotels[hotelIdx].longitude,
+          hotel_id: hotelData!.hotels[hotelIdx].id,
         }),
       );
 
@@ -577,51 +586,77 @@ export default function AIPlannerPage() {
         }
       }
 
-      // Auto-add upcoming events for the destination province
-      try {
-        const upcomingEvents = await eventService.getUpcomingByProvinces(
-          [provinceId],
-          format(startDate, "yyyy-MM-dd"),
-          format(endDate, "yyyy-MM-dd"),
-        );
+      // Save hotels: prefer user's hotelAssignments (direct selections),
+      // fallback to routeData (auto-assigned by route planner)
+      const numNights = trip.days.length - 1;
+      let hasHotelsSaved = false;
 
-        let eventsAdded = 0;
-        for (const event of upcomingEvents) {
-          // Find which day the event falls on
-          const eventStartDate = new Date(event.start_date);
-          const eventDay =
-            Math.ceil(
-              (eventStartDate.getTime() - startDate.getTime()) /
-                (1000 * 60 * 60 * 24),
-            ) + 1;
+      if (
+        Object.keys(hotelAssignments).length > 0 &&
+        hotelData?.hotels?.length
+      ) {
+        // Use the user's explicit hotel selections
+        for (let night = 1; night <= numNights; night++) {
+          const hotelIdx = hotelAssignments[night];
+          if (hotelIdx === undefined || hotelIdx === null) continue;
+          const hotel = hotelData.hotels[hotelIdx];
+          if (!hotel?.id) continue;
 
-          // Only add if event falls within trip days
-          if (eventDay >= 1 && eventDay <= trip.days.length) {
+          const plannedDay = tripData?.days?.find(d => d.day === night);
+          const checkinTime = plannedDay?.checkinTime || "14:00";
+          const checkoutTime = plannedDay?.checkoutTime || "12:00";
+
+          try {
+            await setDayHotelMutation.mutateAsync({
+              tripId,
+              dayNumber: night,
+              data: {
+                hotelId: hotel.id,
+                checkinTime,
+                checkoutTime,
+              },
+            });
+            hasHotelsSaved = true;
+          } catch (e) {
+            console.error(`Failed to set hotel for day ${night}`, e);
+          }
+        }
+      } else if (routeData?.itinerary && routeData.itinerary.length > 0) {
+        // Fallback: use auto-assigned hotels from route planner
+        for (const dayItinerary of routeData.itinerary) {
+          const hotelStop = dayItinerary.route?.find(
+            (stop) => stop.type === "hotel" && stop.hotel_id,
+          );
+
+          if (hotelStop && hotelStop.hotel_id) {
+            const plannedDay = tripData?.days?.find(d => d.day === dayItinerary.day);
+            const checkinTime = plannedDay?.checkinTime || "14:00";
+            const checkoutTime = plannedDay?.checkoutTime || "12:00";
+
             try {
-              await addTripItemMutation.mutateAsync({
+              await setDayHotelMutation.mutateAsync({
                 tripId,
-                dayNumber: eventDay,
-                item: {
-                  item_type: "event",
-                  item_id: event.id,
-                  start_time: "09:00",
-                  end_time: "10:00",
-                  note: event.name,
+                dayNumber: dayItinerary.day,
+                data: {
+                  hotelId: hotelStop.hotel_id,
+                  checkinTime,
+                  checkoutTime,
                 },
               });
-              eventsAdded++;
+              hasHotelsSaved = true;
             } catch (e) {
-              // Event might already be added
-              console.warn(`Could not add event ${event.id}:`, e);
+              console.error(
+                `Failed to set hotel for day ${dayItinerary.day}`,
+                e,
+              );
             }
           }
         }
+      }
 
-        if (eventsAdded > 0) {
-          toast.info(`Added ${eventsAdded} upcoming event(s) to your trip!`);
-        }
-      } catch (e) {
-        console.warn("Failed to fetch upcoming events:", e);
+      // Show info message for day trips without hotels
+      if (numNights <= 0 && !hasHotelsSaved) {
+        toast.info("Day trip created! No overnight stay needed.");
       }
 
       toast.success(`Trip "${trip.name}" created!`);
