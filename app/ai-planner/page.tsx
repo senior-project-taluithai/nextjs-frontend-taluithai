@@ -18,7 +18,6 @@ import {
   useAgentChat,
   type PlannedTrip,
   type ToolCall,
-  type RouteData,
 } from "@/hooks/useAgentChat";
 import { TripDayCards } from "@/components/ai-planner/trip-day-cards";
 import {
@@ -383,8 +382,11 @@ export default function AIPlannerPage() {
 
       if (hotels.length === 0) return;
 
-      const places = tripData.days.flatMap((d) =>
-        d.items
+      const days = tripData.days.map((d) => ({
+        day: d.day,
+        hotelCheckinTime: d.checkinTime || "14:00",
+        hotelCheckoutTime: d.checkoutTime || "12:00",
+        places: d.items
           .filter((i) => i.latitude && i.longitude)
           .map((i) => ({
             name: i.name,
@@ -392,10 +394,12 @@ export default function AIPlannerPage() {
             longitude: i.longitude!,
             pg_place_id: i.pg_place_id,
             category: i.category,
+            startTime: i.startTime,
+            endTime: i.endTime,
           })),
-      );
+      }));
 
-      if (places.length === 0) return;
+      if (days.every((d) => d.places.length === 0)) return;
 
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -407,7 +411,7 @@ export default function AIPlannerPage() {
           user_location: { latitude: 13.7563, longitude: 100.5018 },
           destination_province: tripData.province || "",
           num_days: tripData.days.length,
-          places,
+          days,
           shortlisted_hotels: hotels,
         }),
       })

@@ -28,6 +28,8 @@ interface TripItem {
 
 interface TripDay {
   day: number;
+  checkinTime?: string;
+  hotelCheckinTime?: string;
   items: TripItem[];
 }
 
@@ -58,7 +60,6 @@ interface TripResultPanelProps {
 export function TripResultPanel({
   tripName,
   days,
-  budget: _budget,
   budgetData,
   hotelData,
   routeData,
@@ -225,65 +226,84 @@ export function TripResultPanel({
                             </span>
                           </div>
                         )}
-                        {dayData.items.map((item, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-default"
-                          >
-                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                              <span className="text-base shrink-0">
-                                {item.type === "event" ? "🎉" : "📍"}
-                              </span>
-                              <p className="text-xs font-semibold text-gray-900 flex-1 leading-tight line-clamp-2">
-                                {item.name}
-                              </p>
-                              <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">
-                                {item.category || item.type}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-1 text-gray-400">
-                                <Clock className="w-3 h-3" />
-                                <span className="text-xs">
-                                  {item.startTime}{" "}
-                                  {item.endTime ? `- ${item.endTime}` : ""}
-                                  {!item.startTime && !item.endTime
-                                    ? "Anytime"
-                                    : ""}
-                                </span>
-                              </div>
-                              {item.rating && (
-                                <div className="flex items-center gap-0.5">
-                                  <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                  <span className="text-xs font-medium text-gray-700">
-                                    {item.rating}
+                        {(() => {
+                          const items = dayData.items || [];
+                          const hotelAssignment = hotelAssignments?.[dayData.day];
+                          const hotel = hotelAssignment !== undefined ? hotelData?.hotels[hotelAssignment] : null;
+                          const checkinTime = dayData.checkinTime || dayData.hotelCheckinTime || "14:00";
+                          const isLastDay = dayData.day === days.length;
+
+                          const renderedItems: React.ReactNode[] = [];
+                          let hotelInserted = false;
+
+                          items.forEach((item, idx) => {
+                            if (!isLastDay && hotel && !hotelInserted && (item.startTime || "23:59").localeCompare(checkinTime) >= 0) {
+                                renderedItems.push(
+                                  <div key={`hotel-${idx}`} className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-2 mb-2">
+                                    <Hotel className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span className="text-xs text-emerald-700">
+                                      Check-in ({checkinTime}): {hotel.name}
+                                    </span>
+                                  </div>
+                                );
+                                hotelInserted = true;
+                            }
+                            renderedItems.push(
+                              <div
+                                key={`item-${idx}`}
+                                className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-default mb-2"
+                              >
+                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                  <span className="text-base shrink-0">
+                                    {item.type === "event" ? "🎉" : "📍"}
+                                  </span>
+                                  <p className="text-xs font-semibold text-gray-900 flex-1 leading-tight line-clamp-2">
+                                    {item.name}
+                                  </p>
+                                  <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">
+                                    {item.category || item.type}
                                   </span>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {dayData.items.length === 0 && (
-                          <div className="p-3 text-center text-xs text-gray-400 italic">
-                            No activities planned.
-                          </div>
-                        )}
-                        {dayData.day < days.length &&
-                          hotelAssignments &&
-                          hotelAssignments[dayData.day] !== undefined &&
-                          hotelData?.hotels[hotelAssignments[dayData.day]] && (
-                            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-2">
-                              <Hotel className="w-4 h-4 text-emerald-600 shrink-0" />
-                              <span className="text-xs text-emerald-700">
-                                Overnight:{" "}
-                                {
-                                  hotelData.hotels[
-                                    hotelAssignments[dayData.day]
-                                  ].name
-                                }
-                              </span>
-                            </div>
-                          )}
+                                <div className="flex items-center justify-between mt-2">
+                                  <div className="flex items-center gap-1 text-gray-400">
+                                    <Clock className="w-3 h-3" />
+                                    <span className="text-xs">
+                                      {item.startTime}{" "}
+                                      {item.endTime ? `- ${item.endTime}` : ""}
+                                      {!item.startTime && !item.endTime
+                                        ? "Anytime"
+                                        : ""}
+                                    </span>
+                                  </div>
+                                  {item.rating && (
+                                    <div className="flex items-center gap-0.5">
+                                      <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                      <span className="text-xs font-medium text-gray-700">
+                                        {item.rating}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+
+                          if (!isLastDay && hotel && !hotelInserted) {
+                              renderedItems.push(
+                                <div key="hotel-end" className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-2 mb-2">
+                                  <Hotel className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span className="text-xs text-emerald-700">
+                                    Overnight: {hotel.name}
+                                  </span>
+                                </div>
+                              );
+                          }
+
+                          if (items.length === 0 && renderedItems.length === 0) {
+                              return <div className="p-3 text-center text-xs text-gray-400 italic">No activities planned.</div>;
+                          }
+                          return renderedItems;
+                        })()}
                       </div>
                     )}
                   </div>
