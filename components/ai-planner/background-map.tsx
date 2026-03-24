@@ -11,12 +11,32 @@ const TripMap = dynamic(() => import("@/components/my-trip/trip-map"), {
 
 import type { RouteGeometry } from "@/components/my-trip/trip-map";
 
-interface BackgroundMapProps {
-    items: any[];
-    routeGeometries?: RouteGeometry[];
+interface BackgroundMapItem {
+    id?: string | number;
+    name: string;
+    name_en?: string;
+    type?: string;
+    category?: string;
+    latitude: number;
+    longitude: number;
+    rating?: number;
+    thumbnail_url?: string;
+    priceRange?: string;
+    bookingUrl?: string;
+    address?: string;
+    event_id?: number;
+    pg_place_id?: number;
+    raw_id?: number;
+    itemType?: "place" | "event" | "hotel";
 }
 
-export function BackgroundMap({ items, routeGeometries }: BackgroundMapProps) {
+interface BackgroundMapProps {
+    items: BackgroundMapItem[];
+    routeGeometries?: RouteGeometry[];
+    focusedLocation?: { lat: number; lng: number; id?: string | number } | null;
+}
+
+export function BackgroundMap({ items, routeGeometries, focusedLocation }: BackgroundMapProps) {
     // Transform items if necessary to match TripMap expectations
     const mapItems = useMemo(() => {
         return items.map(item => ({
@@ -28,8 +48,8 @@ export function BackgroundMap({ items, routeGeometries }: BackgroundMapProps) {
     }, [items]);
 
     return (
-        <div className="fixed inset-0 z-[5] w-full h-full pointer-events-auto">
-            <TripMap items={mapItems} routeGeometries={routeGeometries} />
+        <div className="absolute inset-0 z-[5] w-full h-full pointer-events-auto overflow-hidden">
+            <TripMap items={mapItems} routeGeometries={routeGeometries} focusedLocation={focusedLocation} />
             {/* Overlay to dim map slightly so UI pops */}
             <div className="absolute inset-0 bg-background/5 pointer-events-none" />
         </div>

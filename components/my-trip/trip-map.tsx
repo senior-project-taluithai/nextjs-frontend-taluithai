@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -182,6 +182,10 @@ interface MapItem {
   priceRange?: string;
   bookingUrl?: string;
   address?: string;
+  event_id?: number;
+  pg_place_id?: number;
+  raw_id?: number;
+  itemType?: "place" | "event" | "hotel";
 }
 
 export interface RouteGeometry {
@@ -194,6 +198,7 @@ interface TripMapProps {
   routeGeometries?: RouteGeometry[];
   center?: [number, number];
   zoom?: number;
+  focusedLocation?: { lat: number; lng: number; id?: string | number } | null;
 }
 
 const DAY_COLORS = [
@@ -314,8 +319,8 @@ function MapController({
   useEffect(() => {
     if (items.length > 0) {
       const points = items
-        .filter((i) => i.latitude && i.longitude)
-        .map((i) => [i.latitude, i.longitude] as [number, number]);
+        .map((i) => [Number(i.latitude), Number(i.longitude)] as [number, number])
+        .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0);
 
       if (points.length > 0) {
         const bounds = L.latLngBounds(points);
@@ -331,6 +336,56 @@ function MapController({
       onZoomChange(map.getZoom());
     }
   }, [map, onZoomChange]);
+
+  return null;
+}
+
+// Controller to fly the map to a focused location
+function MapFocusController({
+  focusedLocation,
+  markerRefs,
+}: {
+  focusedLocation?: { lat: number; lng: number; id?: string | number } | null;
+  markerRefs: React.MutableRefObject<Record<string, L.Marker | null>>;
+}) {
+  const map = useMap();
+  const [activeItemId, setActiveItemId] = useState<string | number | null>(null);
+
+  useEffect(() => {
+    if (focusedLocation) {
+      const lat = Number(focusedLocation.lat);
+      const lng = Number(focusedLocation.lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        try {
+            const currentCenter = map.getCenter();
+            if (isNaN(currentCenter.lat) || isNaN(currentCenter.lng)) {
+              // Map state is poisoned from a previous bad render, fallback to direct setView without math
+              map.setView([lat, lng], 16);
+            } else {
+              map.flyTo([lat, lng], 16, {
+                animate: true,
+                duration: 1.5,
+              });
+            }
+        } catch (err) {
+            // Leaflet map might be fully broken if bounds computation failed previously
+            map.setView([lat, lng], 16);
+        }
+      }
+      if (focusedLocation.id) {
+        setActiveItemId(focusedLocation.id);
+      }
+    }
+  }, [focusedLocation, map]);
+
+  useEffect(() => {
+    if (activeItemId) {
+      const marker = markerRefs.current[activeItemId];
+      if (marker) {
+        marker.openPopup();
+      }
+    }
+  }, [activeItemId, markerRefs]);
 
   return null;
 }
@@ -423,12 +478,18 @@ export default function TripMap({
   routeGeometries,
   center = [13.7563, 100.5018],
   zoom = 10,
+  focusedLocation,
 }: TripMapProps) {
   const [currentZoom, setCurrentZoom] = useState(zoom);
+  const markerRefs = useRef<Record<string, L.Marker | null>>({});
 
   // MEMOIZE: Filter valid items once, not every render
   const validItems = useMemo(
-    () => items.filter((item) => item.latitude && item.longitude),
+    () => items.filter((item) => {
+        const lat = Number(item.latitude);
+        const lng = Number(item.longitude);
+        return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+    }),
     [items],
   );
 
@@ -443,9 +504,9 @@ export default function TripMap({
     return routeGeometries.map((route) => {
       const color = DAY_COLORS[(route.day - 1) % DAY_COLORS.length];
       // GeoJSON coordinates are [lng, lat], Leaflet needs [lat, lng]
-      const positions = route.coordinates.map(
-        ([lng, lat]) => [lat, lng] as [number, number],
-      );
+      const positions = route.coordinates
+        .map(([lng, lat]) => [Number(lat), Number(lng)] as [number, number])
+        .filter(([pLat, pLng]) => !isNaN(pLat) && !isNaN(pLng));
       return { day: route.day, color, positions };
     });
   }, [routeGeometries]);
@@ -512,6 +573,7 @@ export default function TripMap({
       />
 
       <MapController items={validItems} onZoomChange={handleZoomChange} />
+      <MapFocusController focusedLocation={focusedLocation} markerRefs={markerRefs} />
 
       {/* Route polylines - memoized */}
       {routePolylines.map((route) => (
@@ -560,6 +622,11 @@ export default function TripMap({
           key={`${marker.id}-${marker.item.name}`}
           position={[marker.item.latitude, marker.item.longitude]}
           icon={marker.icon}
+          ref={(r) => {
+            if (marker.id) {
+              markerRefs.current[marker.id] = r;
+            }
+          }}
         >
           <Popup className="min-w-50">
             <div className="flex flex-col gap-2">
@@ -600,7 +667,7 @@ export default function TripMap({
                   {marker.label}
                 </span>
               </div>
-              {marker.item.category?.toLowerCase().includes("hotel") &&
+              {marker.item.itemType === "hotel" &&
                 marker.item.priceRange && (
                   <div className="flex items-center justify-between pt-1 border-t">
                     <span className="text-xs font-bold text-emerald-600">
@@ -618,6 +685,27 @@ export default function TripMap({
                     )}
                   </div>
                 )}
+              {(marker.item.itemType === "place" || marker.item.itemType === "event") && (() => {
+                const detailId = marker.item.itemType === "event"
+                  ? marker.item.event_id
+                  : (marker.item.pg_place_id || marker.item.raw_id);
+                const detailPath = marker.item.itemType === "event"
+                  ? `/event/${detailId}`
+                  : `/place/${detailId}`;
+                if (!detailId) return null;
+                return (
+                  <div className="flex items-center justify-end pt-1 border-t">
+                    <a
+                        href={detailPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-semibold text-white hover:text-white bg-emerald-500 hover:bg-emerald-600 px-2 py-1 rounded transition-colors"
+                      >
+                        View Details
+                      </a>
+                  </div>
+                );
+              })()}
             </div>
           </Popup>
         </Marker>

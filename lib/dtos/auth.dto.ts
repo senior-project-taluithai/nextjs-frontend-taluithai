@@ -27,6 +27,7 @@ export interface ChangePasswordDto {
 }
 
 export interface AuthResponse {
-  accessToken: string;
+  access_token?: string;
+  accessToken?: string;
   user: UserProfile;
 }

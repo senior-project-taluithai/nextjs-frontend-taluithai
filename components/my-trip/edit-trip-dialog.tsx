@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, Loader2, X, MapPin } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +29,7 @@ import { useProvinces } from "@/hooks/api/useProvinces";
 import { useUpdateTrip } from "@/hooks/api/useTrips";
 import { toast } from "sonner";
 
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Label } from "@/components/ui/label";
 
 const formSchema = z.object({
@@ -92,7 +86,6 @@ export function EditTripDialog({ open, onOpenChange, trip }: EditTripDialogProps
         handleSubmit,
         reset,
         setError,
-        watch,
         formState: { errors },
     } = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -106,17 +99,12 @@ export function EditTripDialog({ open, onOpenChange, trip }: EditTripDialogProps
         },
     });
 
-    const selectedProvinceIds = watch("province_ids");
 const provinceOptions = provinces?.map((p: any) => ({
         label: p.name_en,
         value: p.id.toString(),
     })) || [];
 
-const selectedProvinces = provinceOptions.filter((opt) =>
-        selectedProvinceIds?.includes(opt.value)
-    );
-
-useEffect(() => {
+    useEffect(() => {
         if (trip && open) {
             reset({
                 name: trip.name,
@@ -165,10 +153,6 @@ useEffect(() => {
         );
     }
 
-    const removeProvince = (provinceId: string, onChange: (value: string[]) => void) => {
-        onChange(selectedProvinceIds.filter((id) => id !== provinceId));
-    };
-
     const tripStatus = trip?.status || "draft";
     const statusInfo = statusConfig[tripStatus] || statusConfig.draft;
 
@@ -192,36 +176,7 @@ useEffect(() => {
                     </div>
                 </DialogHeader>
 
-                {selectedProvinces.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2 pb-4 border-b border-border/60">
-                        {selectedProvinces.map((province) => (
-                            <Controller
-                                key={province.value}
-                                control={control}
-                                name="province_ids"
-                                render={({ field }) => (
-                                    <span
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-full shadow-sm"
-                                    >
-                                        <MapPin className="w-4 h-4" />
-                                        {province.label}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                field.onChange(selectedProvinceIds.filter((id) => id !== province.value));
-                                            }}
-                                            className="ml-0.5 hover:bg-primary-foreground/20 rounded-full p-0.5 transition-colors focus:outline-none"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </span>
-                                )}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                     <div className="space-y-2.5">
                         <Label htmlFor="trip-name" className="text-base font-semibold text-foreground">
                             Trip Name
@@ -251,44 +206,13 @@ useEffect(() => {
                             control={control}
                             name="province_ids"
                             render={({ field }) => (
-                                <Select
-                                    value=""
-                                    onValueChange={(value) => {
-                                        if (value && !field.value.includes(value)) {
-                                            field.onChange([...field.value, value]);
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger 
-                                        id="provinces"
-                                        className="h-12 w-full rounded-xl text-base px-4 bg-background border-input focus:ring-primary/30 [&:focus]:border-primary shadow-sm"
-                                    >
-                                        <SelectValue placeholder={
-                                            field.value.length > 0 
-                                                ? `${field.value.length} province${field.value.length > 1 ? 's' : ''} selected`
-                                                : "Select provinces..."
-                                        } />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover border-border">
-                                        {provincesLoading ? (
-                                            <div className="flex items-center justify-center py-4">
-                                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                                            </div>
-                                        ) : (
-                                            provinceOptions
-                                                .filter((opt) => !field.value.includes(opt.value))
-                                                .map((option) => (
-                                                    <SelectItem 
-                                                        key={option.value} 
-                                                        value={option.value}
-                                                        className="focus:bg-primary/10 focus:text-primary"
-                                                    >
-                                                        {option.label}
-                                                    </SelectItem>
-                                                ))
-                                        )}
-                                    </SelectContent>
-                                </Select>
+                                <MultiSelect
+                                    options={provinceOptions}
+                                    selected={field.value}
+                                    onChange={field.onChange}
+                                    placeholder={provincesLoading ? "Loading provinces..." : "Select provinces..."}
+                                    className="h-12"
+                                />
                             )}
                         />
                         {errors.province_ids && (

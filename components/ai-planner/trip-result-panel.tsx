@@ -19,6 +19,11 @@ interface TripItem {
   id?: string;
   name: string;
   type: string;
+  pg_place_id?: number;
+  raw_id?: number;
+  event_id?: number;
+  latitude?: number;
+  longitude?: number;
   startTime?: string;
   endTime?: string;
   rating?: number;
@@ -55,6 +60,7 @@ interface TripResultPanelProps {
   onOptimizeHotels?: () => void;
   onConfirm: () => void;
   isConfirming: boolean;
+  onViewOnMap?: (lat: number, lng: number, id?: string) => void;
 }
 
 export function TripResultPanel({
@@ -70,6 +76,7 @@ export function TripResultPanel({
   onOptimizeHotels,
   onConfirm,
   isConfirming,
+  onViewOnMap,
 }: TripResultPanelProps) {
   const totalPlaces = days.reduce((sum, d) => sum + d.items.length, 0);
   // Initialize expanded days array with all days initially expanded
@@ -160,6 +167,7 @@ export function TripResultPanel({
             hotelAssignments={hotelAssignments}
             onAssignHotel={onAssignHotel}
             onOptimizeHotels={onOptimizeHotels}
+            onViewOnMap={onViewOnMap}
           />
         ) : activeView === "itinerary" ? (
           days.length === 0 ? (
@@ -241,23 +249,36 @@ export function TripResultPanel({
                                 renderedItems.push(
                                   <div key={`hotel-${idx}`} className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-2 mb-2">
                                     <Hotel className="w-4 h-4 text-emerald-600 shrink-0" />
-                                    <span className="text-xs text-emerald-700">
+                                    <span className="text-xs text-emerald-700 flex-1">
                                       Check-in ({checkinTime}): {hotel.name}
                                     </span>
+                                    {onViewOnMap && hotel.latitude && hotel.longitude && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          onViewOnMap(hotel.latitude!, hotel.longitude!, `hotel-${hotelAssignment}-${hotel.name}`);
+                                        }}
+                                        className="flex items-center gap-1 text-[10px] text-emerald-700 hover:text-emerald-800 font-medium px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
+                                      >
+                                        <MapPin className="w-2.5 h-2.5" />
+                                        Map
+                                      </button>
+                                    )}
                                   </div>
                                 );
                                 hotelInserted = true;
                             }
-                            renderedItems.push(
-                              <div
-                                key={`item-${idx}`}
-                                className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-default mb-2"
-                              >
+                            const hasCoords = item.latitude && item.longitude;
+                            const itemId = item.id || `place-${dayData.day}-${idx}-${item.name}`;
+
+                            const content = (
+                                <>
                                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                   <span className="text-base shrink-0">
                                     {item.type === "event" ? "🎉" : "📍"}
                                   </span>
-                                  <p className="text-xs font-semibold text-gray-900 flex-1 leading-tight line-clamp-2">
+                                  <p className="text-xs font-semibold text-gray-900 flex-1 leading-tight line-clamp-2 group-hover:text-emerald-600 transition-colors">
                                     {item.name}
                                   </p>
                                   <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">
@@ -275,16 +296,37 @@ export function TripResultPanel({
                                         : ""}
                                     </span>
                                   </div>
-                                  {item.rating && (
-                                    <div className="flex items-center gap-0.5">
-                                      <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                      <span className="text-xs font-medium text-gray-700">
-                                        {item.rating}
-                                      </span>
-                                    </div>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    {item.rating && (
+                                      <div className="flex items-center gap-0.5">
+                                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                        <span className="text-xs font-medium text-gray-700">
+                                          {item.rating}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                                </>
+                            );
+
+                            renderedItems.push(
+                              hasCoords ? (
+                                <div
+                                  key={`item-${idx}`}
+                                  onClick={() => onViewOnMap?.(item.latitude!, item.longitude!, itemId)}
+                                  className="group bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all mb-2"
+                                >
+                                  {content}
+                                </div>
+                              ) : (
+                                <div
+                                  key={`item-${idx}`}
+                                  className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-default mb-2"
+                                >
+                                  {content}
+                                </div>
+                              )
                             );
                           });
 
@@ -292,9 +334,22 @@ export function TripResultPanel({
                               renderedItems.push(
                                 <div key="hotel-end" className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-2 mb-2">
                                   <Hotel className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  <span className="text-xs text-emerald-700">
+                                  <span className="text-xs text-emerald-700 flex-1">
                                     Overnight: {hotel.name}
                                   </span>
+                                  {onViewOnMap && hotel.latitude && hotel.longitude && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onViewOnMap(hotel.latitude!, hotel.longitude!, `hotel-${hotelAssignment}-${hotel.name}`);
+                                      }}
+                                      className="flex items-center gap-1 text-[10px] text-emerald-700 hover:text-emerald-800 font-medium px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
+                                    >
+                                      <MapPin className="w-2.5 h-2.5" />
+                                      Map
+                                    </button>
+                                  )}
                                 </div>
                               );
                           }
