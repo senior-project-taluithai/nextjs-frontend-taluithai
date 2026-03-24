@@ -605,7 +605,7 @@ export default function Home() {
       </div>
 
       {/* ─── Content ─── */}
-      <div className="px-4 sm:px-6 lg:px-8 xl:px-12 pb-12 -mt-2 max-w-[1400px] mx-auto">
+      <div className="px-4 py-4 sm:px-6 lg:px-8 xl:px-12 pb-12 -mt-2 max-w-[1400px] mx-auto">
         {/* ═══ Section 01: AI-Curated Recommendations (Bento Grid) ═══ */}
         <section className="mb-12">
           <div className="flex items-end justify-between mb-6">

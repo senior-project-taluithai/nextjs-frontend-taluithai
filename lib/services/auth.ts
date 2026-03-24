@@ -96,7 +96,9 @@ export const authService = {
       const response = await api.post<RecommendationPreferences>('/users/me/recommendation-preferences', data);
       return response.data;
   },
-  
-  // Note: simpler check not possible with httpOnly cookies without making a request.
-  // We'll rely on getProfile failing or succeeding to determine auth state.
+
+  getTravelStats: async (): Promise<{trips: number, places: number, saved: number}> => {
+      const response = await api.get<{trips: number, places: number, saved: number}>('/users/me/travel-stats');
+      return response.data;
+  },
 };

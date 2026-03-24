@@ -48,4 +48,6 @@ AGENTS.md
 .github
 
 CLAUDE.md
+
 .env*.local
+/revised-design
