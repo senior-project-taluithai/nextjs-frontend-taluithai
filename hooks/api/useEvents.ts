@@ -69,3 +69,11 @@ export const useMonthEvents = (year: number, month: number) => {
     queryFn: () => eventService.getEventsByMonth(year, month),
   });
 };
+
+export const useTiktokVideos = (eventId: number) => {
+  return useQuery({
+    queryKey: ["events", eventId, "tiktok-videos"],
+    queryFn: () => eventService.getTiktokVideos(eventId),
+    enabled: !!eventId,
+  });
+};
