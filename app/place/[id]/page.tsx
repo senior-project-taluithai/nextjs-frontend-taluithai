@@ -59,7 +59,7 @@ import {
   useIsFavoritePlace,
 } from "@/hooks/api/useFavorites";
 import { interactionService } from "@/lib/services/interaction";
-import { TikTokEmbed } from "react-social-media-embed";
+
 import { useAuth } from "@/components/providers/AuthProvider";
 import dynamic from "next/dynamic";
 
@@ -1307,9 +1307,23 @@ export default function PlaceDetailPage({
                       {tiktokVideos.map((url) => (
                         <div
                           key={url}
-                          className="flex justify-center bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100"
+                          className="flex justify-center bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 h-[600px]"
                         >
-                          <TikTokEmbed url={url} width={325} />
+                          {(() => {
+                            const videoIdMatch = url.match(/\/video\/(\d+)/);
+                            const videoId = videoIdMatch ? videoIdMatch[1] : '';
+                            return videoId ? (
+                              <iframe
+                                src={`https://www.tiktok.com/embed/v2/${videoId}?lang=en-US `}
+                                width="325"
+                                height="600"
+                                frameBorder="0"
+                                allow="encrypted-media;"
+                                title="TikTok video"
+                                className="w-full h-full"
+                              ></iframe>
+                            ) : null;
+                          })()}
                         </div>
                       ))}
                     </div>
