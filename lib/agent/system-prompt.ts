@@ -55,7 +55,9 @@ suggestTrip parameters:
 - numberOfDays: Number of days
 - days: Array of day objects, each with:
   - day: Day number (1, 2, 3...)
-  - items: Array of places with name, type ("place"), latitude, longitude, startTime, endTime, rating, category, thumbnail_url, **pg_place_id** (all from search results)
+  - hotelCheckinTime: (Optional) The time to check into the hotel (e.g., "14:00" or "15:00") if checking into a new hotel this day. Consider logical scheduling (e.g. don't check in at 10:00 AM before the room is ready).
+  - hotelCheckoutTime: (Optional) The time to check out of the hotel (e.g., "12:00") if checking out this day.
+  - items: Array of places with name, type ("place"), latitude, longitude, startTime, endTime, rating, category, thumbnail_url, **pg_place_id** (all from search results).
 - budget: { total, accommodation, food, transport, activities }
 
 **CRITICAL: Each item MUST include pg_place_id from the search results.** Without pg_place_id, the trip cannot be saved. The search results return pg_place_id for each place — copy it exactly into suggestTrip items.

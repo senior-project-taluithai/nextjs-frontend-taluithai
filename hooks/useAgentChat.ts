@@ -74,6 +74,7 @@ export interface HotelPrice {
 }
 
 export interface HotelItem {
+  id: number;
   name: string;
   address: string;
   latitude: number;
@@ -99,7 +100,7 @@ export interface RouteStop {
   lat: number;
   lng: number;
   pg_place_id?: number;
-  hotel_id?: string;
+  hotel_id?: number;
   category?: string;
 }
 
@@ -147,6 +148,8 @@ export interface RoutePlanResponse {
 
 export interface PlannedDay {
   day: number;
+  checkinTime?: string;
+  checkoutTime?: string;
   items: PlannedDayItem[];
 }
 
@@ -373,6 +376,7 @@ export function useAgentChat(): UseAgentChatReturn {
         if (hotelData) {
           const hotelContext = JSON.stringify({
             hotels: hotelData.hotels.map((h) => ({
+              id: h.id,
               name: h.name,
               address: h.address,
               latitude: h.latitude,
@@ -1502,6 +1506,8 @@ function parseTripData(parsed: Record<string, unknown>): PlannedTrip {
     province: (parsed.province as string) || "",
     days: days.map((d, idx) => ({
       day: (d.day as number) || idx + 1,
+      checkinTime: toStr(d.hotelCheckinTime) || toStr(d.checkinTime),
+      checkoutTime: toStr(d.hotelCheckoutTime) || toStr(d.checkoutTime),
       items: Array.isArray(d.items)
         ? d.items.map((item: Record<string, unknown>) => {
             const rawType = toStr(item.type) || toStr(item.category) || "place";
@@ -1634,6 +1640,7 @@ function parseHotelData(raw: Record<string, unknown>): HotelData {
           (h): h is Record<string, unknown> => !!h && typeof h === "object",
         )
         .map((h) => ({
+          id: typeof h.id === "number" ? h.id : 0,
           name: (typeof h.name === "string" && h.name) || "",
           address: (typeof h.address === "string" && h.address) || "",
           latitude: typeof h.latitude === "number" ? h.latitude : 0,
@@ -1770,7 +1777,12 @@ function parseRouteData(raw: Record<string, unknown>): RouteData {
                 lat: toNum(r.lat ?? r.latitude),
                 lng: toNum(r.lng ?? r.longitude),
                 pg_place_id: r.pg_place_id as number | undefined,
-                hotel_id: r.hotel_id as string | undefined,
+                hotel_id:
+                  typeof r.hotel_id === "number"
+                    ? r.hotel_id
+                    : typeof r.hotel_id === "string"
+                      ? parseInt(r.hotel_id, 10)
+                      : undefined,
                 category: r.category as string | undefined,
               }))
             : [],
