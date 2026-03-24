@@ -549,10 +549,13 @@ export default function TripDetailPage({
   // Loading state
   if (tripLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-b from-gray-50 to-white">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Loading trip details...</p>
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+          </div>
+          <p className="text-gray-600 font-medium">Loading trip details...</p>
+          <p className="text-gray-400 text-sm mt-1">Please wait a moment</p>
         </div>
       </div>
     );
@@ -561,23 +564,24 @@ export default function TripDetailPage({
   const statusConfig = STATUS_CONFIG[trip.status] || STATUS_CONFIG.draft;
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f8f9fa]">
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100/50">
       {/* ── Top Header Bar ── */}
-      <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white border-b border-gray-100 shadow-sm z-10 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4 bg-white border-b border-gray-100/80 z-10 shrink-0">
+        <div className="flex items-center gap-4 min-w-0">
           <button
             onClick={() => router.push("/my-trip")}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors shrink-0"
+            className="w-9 h-9 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all shrink-0 border border-gray-100"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-bold text-gray-900 text-sm sm:text-base truncate">
+            <div className="flex items-center gap-3">
+              <h1 className="font-bold text-gray-900 text-base sm:text-lg truncate tracking-tight">
                 {trip.name}
               </h1>
               <span
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusConfig.bg} ${statusConfig.color}`}
+                className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 border ${statusConfig.bg} ${statusConfig.color}`}
+                style={{ borderColor: 'transparent' }}
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}
@@ -585,28 +589,24 @@ export default function TripDetailPage({
                 {statusConfig.label}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 hidden sm:flex">
-              <Calendar className="w-3 h-3" />
-              <span>
-                {format(new Date(trip.start_date), "MMM d")} –{" "}
-                {format(new Date(trip.end_date), "MMM d, yyyy")}
+            <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 hidden sm:flex">
+              <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-md">
+                <Calendar className="w-3 h-3 text-gray-400" />
+                {format(new Date(trip.start_date), "MMM d")} – {format(new Date(trip.end_date), "MMM d, yyyy")}
               </span>
               {trip.provinces && trip.provinces.length > 0 && (
-                <>
-                  <span className="text-gray-300">•</span>
-                  <MapPin className="w-3 h-3" />
-                  <span>
-                    {trip.provinces.map((p: any) => p.name_en).join(", ")}
-                  </span>
-                </>
+                <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-md">
+                  <MapPin className="w-3 h-3 text-gray-400" />
+                  {trip.provinces.map((p: any) => p.name_en).join(", ")}
+                </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsEditTripOpen(true)}
-            className="flex items-center gap-1.5 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 rounded-xl transition-all border border-gray-200 hover:border-gray-300"
           >
             <Edit2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Edit</span>
@@ -614,7 +614,7 @@ export default function TripDetailPage({
 
           <button
             onClick={() => setIsDeleteDialogOpen(true)}
-            className="flex items-center gap-1.5 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-md shadow-red-200"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all border border-red-100 hover:border-red-200"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Delete</span>
@@ -663,8 +663,8 @@ export default function TripDetailPage({
         {/* ── LEFT: Itinerary Panel ── */}
         <div
           className={`
-                    flex flex-col bg-white border-r border-gray-100 overflow-hidden
-                    w-full sm:w-[350px] md:w-[380px] lg:w-[430px] shrink-0
+                    flex flex-col bg-white border-r border-gray-100/80 overflow-hidden shadow-sm
+                    w-full sm:w-[360px] md:w-[400px] lg:w-[440px] shrink-0
                     absolute sm:relative inset-0 z-20 sm:z-auto transition-transform duration-300
                     ${activeMobilePanel === "itinerary" ? "translate-x-0" : "-translate-x-full sm:translate-x-0"}
                 `}
@@ -681,34 +681,38 @@ export default function TripDetailPage({
           </div>
 
           {/* Day tabs */}
-          <div className="flex items-center gap-1.5 px-4 pt-4 pb-3 border-b border-gray-50 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-gray-100/50 overflow-x-auto scrollbar-hide">
             {sortedDays.map((day) => (
               <button
                 key={day.id}
                 onClick={() => setSelectedDay(day.day_number)}
-                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 shrink-0 ${
+                className={`relative px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 shrink-0 ${
                   selectedDay === day.day_number
-                    ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    ? "bg-gray-900 text-white shadow-lg"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
                 }`}
               >
-                Day {day.day_number}
+                <span className="relative z-10">Day {day.day_number}</span>
+                {selectedDay === day.day_number && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+                )}
               </button>
             ))}
-            <button className="w-9 h-9 shrink-0 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-400 transition-colors">
+            <button className="w-10 h-10 shrink-0 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all border border-dashed border-gray-200 hover:border-gray-300">
               <Plus className="w-4 h-4" />
             </button>
           </div>
 
           {/* Date header + cost summary */}
-          <div className="px-4 py-3 flex items-center justify-between">
+          <div className="px-4 py-4 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-transparent">
             <div>
-              <p className="font-semibold text-gray-900 text-sm">
+              <p className="font-bold text-gray-900 text-base tracking-tight">
                 {currentDay
                   ? format(new Date(currentDay.date), "EEEE, MMMM do")
                   : "Select a Day"}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                 {currentDay?.items.length || 0} places planned
               </p>
             </div>
@@ -716,11 +720,13 @@ export default function TripDetailPage({
 
           {/* Hotel for the day */}
           {currentDay?.hotel && (
-            <div className="mx-3 mb-3 bg-purple-50 border border-purple-100 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
+            <div className="mx-4 mb-4 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100/60 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Bed className="w-4 h-4 text-purple-600" />
-                  <span className="text-xs font-semibold text-purple-700">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center">
+                    <Bed className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-indigo-900">
                     Day {selectedDay} Hotel
                   </span>
                 </div>
@@ -736,42 +742,49 @@ export default function TripDetailPage({
                       );
                     }
                   }}
-                  className="text-xs text-red-500 hover:text-red-600 font-medium"
+                  className="text-xs text-red-500 hover:text-red-600 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
                 >
                   Remove
                 </button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 {(currentDay.hotel.thumbnail_url || currentDay.hotel.images?.[0]?.url) && (
                   <img
                     src={currentDay.hotel.thumbnail_url || currentDay.hotel.images?.[0]?.url}
                     alt={currentDay.hotel.name}
-                    className="w-12 h-12 object-cover rounded-lg"
+                    className="w-14 h-14 object-cover rounded-xl shadow-sm border border-white"
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm text-gray-900 line-clamp-1">
+                  <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">
                     {currentDay.hotel.name_en || currentDay.hotel.name}
                   </h4>
                   {currentDay.hotel.rating > 0 && (
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                      <span className="text-xs text-gray-600">
-                        {currentDay.hotel.rating.toFixed(1)}
-                      </span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded-md">
+                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                        <span className="text-xs font-semibold text-amber-700">
+                          {currentDay.hotel.rating.toFixed(1)}
+                        </span>
+                      </div>
+                      {currentDay.hotel.price_range && (
+                        <span className="text-xs font-semibold text-emerald-600">
+                          {currentDay.hotel.price_range}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
               {/* Check-in/Check-out times */}
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-3 mt-3 bg-white/60 rounded-xl p-2.5">
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 block mb-0.5">
+                  <label className="text-[10px] font-medium text-indigo-600 block mb-1">
                     Check-in
                   </label>
                   <input
                     type="time"
-                    className="h-7 text-xs px-2 py-1 bg-white border border-gray-200 rounded-lg w-full focus:outline-none focus:ring-1 focus:ring-purple-300"
+                    className="h-8 text-xs px-2.5 py-1.5 bg-white border border-indigo-100 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-200 font-medium text-gray-700"
                     value={currentDay.hotel_checkin_time || "14:00"}
                     onChange={(e) => {
                       setDayHotelMutation.mutate({
@@ -788,12 +801,12 @@ export default function TripDetailPage({
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 block mb-0.5">
+                  <label className="text-[10px] font-medium text-indigo-600 block mb-1">
                     Check-out
                   </label>
                   <input
                     type="time"
-                    className="h-7 text-xs px-2 py-1 bg-white border border-gray-200 rounded-lg w-full focus:outline-none focus:ring-1 focus:ring-purple-300"
+                    className="h-8 text-xs px-2.5 py-1.5 bg-white border border-indigo-100 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-200 font-medium text-gray-700"
                     value={currentDay.hotel_checkout_time || "12:00"}
                     onChange={(e) => {
                       setDayHotelMutation.mutate({
@@ -813,13 +826,15 @@ export default function TripDetailPage({
           )}
 
           {/* Place list */}
-          <div className="flex-1 overflow-y-auto px-3 pb-20 sm:pb-4 space-y-2.5">
+          <div className="flex-1 overflow-y-auto px-4 pb-20 sm:pb-4 space-y-3">
             {currentDay?.items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12 border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
-                <Plus className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-sm font-medium">No items yet</p>
-                <p className="text-xs opacity-70 text-center px-4">
-                  Add from map or suggestions on the right
+              <div className="h-full flex flex-col items-center justify-center py-16 rounded-2xl bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+                  <Plus className="w-6 h-6 text-gray-400" />
+                </div>
+                <p className="text-sm font-semibold text-gray-700">No places added yet</p>
+                <p className="text-xs text-gray-400 text-center px-6 mt-1 max-w-[200px]">
+                  Explore recommendations on the right panel
                 </p>
               </div>
             ) : (
@@ -848,10 +863,10 @@ export default function TripDetailPage({
               </DndContext>
             )}
 
-            {/* Add place button inside timeline (future enhancement) */}
+            {/* Add place button inside timeline */}
             {currentDay?.items.length !== 0 && (
-              <div className="pt-2">
-                <button className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 hover:border-emerald-400 text-gray-400 hover:text-emerald-600 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 group">
+              <div className="pt-3 pb-2">
+                <button className="w-full py-3.5 rounded-2xl border-2 border-dashed border-gray-200 hover:border-sky-300 bg-gray-50/50 hover:bg-sky-50/50 text-gray-400 hover:text-sky-600 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 group">
                   <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   Add place to Day {selectedDay}
                 </button>
@@ -887,40 +902,49 @@ export default function TripDetailPage({
           </div>
 
           {/* Right panel tab bar */}
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white border-b border-gray-100 shrink-0">
-            <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+          <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white border-b border-gray-100/80 shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
               {(["places", "events", "hotels", "saved", "budget"] as const).map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => {
-                      setActiveTab(tab);
-                      setShowMap(false);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 capitalize shrink-0 ${
-                      activeTab === tab && !showMap
-                        ? "bg-gray-100 text-gray-900"
-                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {tab === "places" && <MapPin className="w-3.5 h-3.5" />}
-                    {tab === "events" && <Calendar className="w-3.5 h-3.5" />}
-                    {tab === "hotels" && <Bed className="w-3.5 h-3.5" />}
-                    {tab === "saved" && <Heart className="w-3.5 h-3.5" />}
-                    {tab === "budget" && <Wallet className="w-3.5 h-3.5" />}
-                    <span className="hidden xs:inline">
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </span>
-                  </button>
-                ),
+                (tab) => {
+                  const isActive = activeTab === tab && !showMap;
+                  const tabConfig: Record<string, { icon: typeof MapPin; activeColor: string }> = {
+                    places: { icon: MapPin, activeColor: 'bg-sky-50 text-sky-700 border-sky-200' },
+                    events: { icon: Calendar, activeColor: 'bg-amber-50 text-amber-700 border-amber-200' },
+                    hotels: { icon: Bed, activeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+                    saved: { icon: Heart, activeColor: 'bg-rose-50 text-rose-700 border-rose-200' },
+                    budget: { icon: Wallet, activeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                  };
+                  const config = tabConfig[tab];
+                  const IconComponent = config.icon;
+                  
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => {
+                        setActiveTab(tab);
+                        setShowMap(false);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 capitalize shrink-0 border ${
+                        isActive
+                          ? config.activeColor
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <IconComponent className="w-4 h-4" />
+                      <span className="hidden sm:inline">
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      </span>
+                    </button>
+                  );
+                }
               )}
             </div>
             <button
               onClick={() => setShowMap(!showMap)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 shrink-0 border ${
                 showMap
-                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-gray-900 text-white border-gray-900 shadow-lg"
+                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
               }`}
             >
               <MapIcon className="w-4 h-4" />
@@ -942,18 +966,20 @@ export default function TripDetailPage({
                 >
                   <TripMap items={mapItems} routeGeometries={routeGeometries} />
                   {/* Place markers legend */}
-                  <div className="absolute bottom-6 right-6 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-4 min-w-[200px] border border-gray-100 hidden md:block">
-                    <p className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-500" /> Day{" "}
-                      {selectedDay} Places
+                  <div className="absolute bottom-6 right-6 bg-white/98 backdrop-blur-md rounded-2xl shadow-xl p-4 min-w-[220px] border border-gray-200/50 hidden md:block">
+                    <p className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-gray-900 flex items-center justify-center">
+                        <MapPin className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      Day {selectedDay} Places
                     </p>
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+                    <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                       {currentDay?.items.map((p, i) => (
-                        <div key={p.id} className="flex items-center gap-2.5">
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                        <div key={p.id} className="flex items-center gap-2.5 group">
+                          <div className="w-6 h-6 rounded-lg bg-sky-500 flex items-center justify-center text-white text-[11px] font-bold shrink-0 shadow-sm">
                             {i + 1}
                           </div>
-                          <p className="text-xs text-gray-600 line-clamp-1">
+                          <p className="text-xs text-gray-600 line-clamp-1 font-medium group-hover:text-gray-900 transition-colors">
                             {p.place?.name_en ||
                               p.place?.name ||
                               p.event?.name_en ||
@@ -963,7 +989,7 @@ export default function TripDetailPage({
                       ))}
                       {(!currentDay?.items ||
                         currentDay.items.length === 0) && (
-                        <p className="text-xs text-gray-400 italic">
+                        <p className="text-xs text-gray-400 italic py-2">
                           No places added yet
                         </p>
                       )}
@@ -1019,19 +1045,23 @@ export default function TripDetailPage({
 
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-bold text-gray-900 text-[1.05rem]">
-                            All in{" "}
-                            {trip.provinces && trip.provinces.length > 0
-                              ? trip.provinces
-                                  .map((p: any) => p.name_en)
-                                  .join(" & ")
-                              : "Selected Provinces"}
-                          </h3>
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-lg tracking-tight">
+                              Explore Places
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              in {trip.provinces && trip.provinces.length > 0
+                                ? trip.provinces
+                                    .map((p: any) => p.name_en)
+                                    .join(" & ")
+                                : "Selected Provinces"}
+                            </p>
+                          </div>
                         </div>
 
                         {/* Search and Filter Bar */}
-                        <div className="flex gap-2 sticky top-0 z-10 bg-[#f8f9fa]/90 backdrop-blur-md pt-1 pb-3 -mx-1 px-1">
-                          <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-emerald-100 focus-within:border-emerald-300 transition-all">
+                        <div className="flex gap-2.5 sticky top-0 z-10 bg-[#f8f9fa]/95 backdrop-blur-md py-3 -mx-1 px-1">
+                          <div className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-sky-100 focus-within:border-sky-300 transition-all hover:border-gray-300">
                             <Search className="w-4 h-4 text-gray-400 shrink-0" />
                             <input
                               type="text"
@@ -1043,7 +1073,7 @@ export default function TripDetailPage({
                                   search: e.target.value,
                                 }))
                               }
-                              className="flex-1 bg-transparent outline-none text-sm text-gray-900 placeholder-gray-400"
+                              className="flex-1 bg-transparent outline-none text-sm text-gray-900 placeholder-gray-400 font-medium"
                             />
                             {filters.search && (
                               <button
@@ -1053,16 +1083,16 @@ export default function TripDetailPage({
                                     search: "",
                                   }))
                                 }
-                                className="text-gray-400 hover:text-gray-600"
+                                className="w-5 h-5 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
                               >
-                                <X className="w-4 h-4" />
+                                <X className="w-3 h-3" />
                               </button>
                             )}
                           </div>
 
                           <Sheet>
                             <SheetTrigger asChild>
-                              <button className="w-10 h-10 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-500 transition-colors shrink-0 shadow-sm relative">
+                              <button className="w-11 h-11 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center text-gray-600 transition-all shrink-0 shadow-sm relative">
                                 <SlidersHorizontal className="h-4 w-4" />
                                 {Object.keys(filters).filter(
                                   (k) =>
@@ -1070,7 +1100,7 @@ export default function TripDetailPage({
                                     k !== "page" &&
                                     filters[k],
                                 ).length > 0 && (
-                                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+                                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-sky-500 rounded-full border-2 border-white shadow-sm" />
                                 )}
                               </button>
                             </SheetTrigger>
@@ -1097,8 +1127,8 @@ export default function TripDetailPage({
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                           {placesLoading ? (
                             <div className="col-span-full flex flex-col items-center justify-center min-h-[200px] text-gray-400">
-                              <Loader2 className="w-8 h-8 animate-spin mb-3 text-emerald-500" />
-                              <p className="text-sm">Loading places...</p>
+                              <Loader2 className="w-8 h-8 animate-spin mb-3 text-sky-500" />
+                              <p className="text-sm font-medium">Loading places...</p>
                             </div>
                           ) : placesData && placesData.data.length > 0 ? (
                             placesData.data.map((place: any) => (
@@ -1545,116 +1575,118 @@ export default function TripDetailPage({
 
                       {hotelsLoading ? (
                         <div className="flex flex-col items-center justify-center min-h-[200px] text-gray-400">
-                          <Loader2 className="w-8 h-8 animate-spin mb-3 text-purple-500" />
-                          <p className="text-sm">Loading hotels...</p>
+                          <Loader2 className="w-8 h-8 animate-spin mb-3 text-indigo-500" />
+                          <p className="text-sm font-medium">Loading hotels...</p>
                         </div>
                       ) : hotelsData && hotelsData.data.length > 0 ? (
                         <>
                           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            {hotelsData.data.map((hotel: any) => (
-                              <div
-                                key={hotel.id}
-                                className={`relative bg-white rounded-2xl overflow-hidden border transition-all duration-200 hover:shadow-lg ${
-                                  currentDay?.hotel?.id === hotel.id
-                                    ? "border-purple-400 shadow-md shadow-purple-100"
-                                    : "border-gray-100 hover:border-gray-200"
-                                }`}
-                              >
-                                <div className="relative aspect-[4/3]">
-                                  <img
-                                    src={
-                                      hotel.thumbnail_url ||
-                                      hotel.images?.[0]?.url ||
-                                      `/placeholder-hotel.jpg`
-                                    }
-                                    alt={hotel.name_en || hotel.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                  {currentDay?.hotel?.id === hotel.id && (
-                                    <div className="absolute top-2 left-2 bg-purple-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
-                                      Selected
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="p-3">
-                                  <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">
-                                    {hotel.name_en || hotel.name}
-                                  </h4>
-                                  {hotel.address && (
-                                    <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
-                                      {hotel.address}
-                                    </p>
-                                  )}
-                                  {hotel.amenities && hotel.amenities.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1.5">
-                                      {hotel.amenities.slice(0, 3).map((amenity: string, i: number) => (
-                                        <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
-                                          {amenity}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  <div className="flex items-center justify-between mt-2">
-                                    <div className="flex items-center gap-1.5">
-                                      {hotel.rating > 0 && (
-                                        <span className="flex items-center gap-0.5 text-xs">
-                                          <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                                          {hotel.rating.toFixed(1)}
-                                        </span>
-                                      )}
-                                    </div>
+                            {hotelsData.data.map((hotel: any) => {
+                              const isSelected = currentDay?.hotel?.id === hotel.id;
+                              return (
+                                <div
+                                  key={hotel.id}
+                                  className={`relative bg-white rounded-2xl overflow-hidden border transition-all duration-300 group ${
+                                    isSelected
+                                      ? "border-indigo-400 shadow-lg shadow-indigo-100 ring-2 ring-indigo-100"
+                                      : "border-gray-100 hover:border-gray-200 hover:shadow-lg"
+                                  }`}
+                                >
+                                  <div className="relative aspect-[4/3] overflow-hidden">
+                                    <img
+                                      src={
+                                        hotel.thumbnail_url ||
+                                        hotel.images?.[0]?.url ||
+                                        `/placeholder-hotel.jpg`
+                                      }
+                                      alt={hotel.name_en || hotel.name}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                                    {isSelected && (
+                                      <div className="absolute top-3 left-3 bg-indigo-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                                        <Check className="w-3 h-3" />
+                                        Selected
+                                      </div>
+                                    )}
+                                    {hotel.rating > 0 && (
+                                      <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm">
+                                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                                        <span className="text-xs font-bold text-gray-800">{hotel.rating.toFixed(1)}</span>
+                                      </div>
+                                    )}
                                     {hotel.price_range && (
-                                      <span className="text-xs font-semibold text-emerald-600">
-                                        ฿{hotel.price_range}
-                                      </span>
+                                      <div className="absolute bottom-3 right-3 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-sm">
+                                        {hotel.price_range}
+                                      </div>
                                     )}
                                   </div>
-                                  <button
-                                    onClick={() => {
-                                      if (currentDay?.hotel?.id === hotel.id) {
-                                        removeDayHotelMutation.mutate({
-                                          tripId: parseInt(tripId),
-                                          dayNumber: selectedDay,
-                                        });
-                                        if (trip?.TripDays) {
-                                          recalculateAccommodationBudget(
-                                            trip.TripDays, trip.budget, selectedDay, null,
-                                          );
+                                  <div className="p-3.5">
+                                    <h4 className="font-semibold text-sm text-gray-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                                      {hotel.name_en || hotel.name}
+                                    </h4>
+                                    {hotel.address && (
+                                      <p className="text-xs text-gray-400 line-clamp-1 mt-0.5 flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" />
+                                        {hotel.address}
+                                      </p>
+                                    )}
+                                    {hotel.amenities && hotel.amenities.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-2">
+                                        {hotel.amenities.slice(0, 2).map((amenity: string, i: number) => (
+                                          <span key={i} className="text-[10px] bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100 font-medium">
+                                            {amenity}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <button
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          removeDayHotelMutation.mutate({
+                                            tripId: parseInt(tripId),
+                                            dayNumber: selectedDay,
+                                          });
+                                          if (trip?.TripDays) {
+                                            recalculateAccommodationBudget(
+                                              trip.TripDays, trip.budget, selectedDay, null,
+                                            );
+                                          }
+                                        } else {
+                                          setDayHotelMutation.mutate({
+                                            tripId: parseInt(tripId),
+                                            dayNumber: selectedDay,
+                                            data: {
+                                              hotelId: hotel.id,
+                                              checkinTime: "14:00",
+                                              checkoutTime: "12:00",
+                                            },
+                                          });
+                                          if (trip?.TripDays) {
+                                            recalculateAccommodationBudget(
+                                              trip.TripDays, trip.budget, selectedDay, hotel,
+                                            );
+                                          }
                                         }
-                                      } else {
-                                        setDayHotelMutation.mutate({
-                                          tripId: parseInt(tripId),
-                                          dayNumber: selectedDay,
-                                          data: {
-                                            hotelId: hotel.id,
-                                            checkinTime: "14:00",
-                                            checkoutTime: "12:00",
-                                          },
-                                        });
-                                        if (trip?.TripDays) {
-                                          recalculateAccommodationBudget(
-                                            trip.TripDays, trip.budget, selectedDay, hotel,
-                                          );
-                                        }
+                                      }}
+                                      disabled={
+                                        setDayHotelMutation.isPending ||
+                                        removeDayHotelMutation.isPending
                                       }
-                                    }}
-                                    disabled={
-                                      setDayHotelMutation.isPending ||
-                                      removeDayHotelMutation.isPending
-                                    }
-                                    className={`w-full mt-3 py-2 px-3 rounded-xl text-sm font-medium transition-all ${
-                                      currentDay?.hotel?.id === hotel.id
-                                        ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                        : "bg-purple-500 text-white hover:bg-purple-600"
-                                    } disabled:opacity-50`}
-                                  >
-                                    {currentDay?.hotel?.id === hotel.id
-                                      ? "Remove Hotel"
-                                      : "Select for Day " + selectedDay}
-                                  </button>
+                                      className={`w-full mt-3 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                                        isSelected
+                                          ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                                          : "bg-indigo-500 text-white hover:bg-indigo-600 shadow-sm hover:shadow-md"
+                                      } disabled:opacity-50`}
+                                    >
+                                      {isSelected
+                                        ? "Remove Hotel"
+                                        : "Select for Day " + selectedDay}
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
 
                           {hotelsData.last_page > 1 && (
@@ -1996,7 +2028,11 @@ function PlannerCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-shadow group flex flex-col h-full"
+      className={`bg-white rounded-2xl overflow-hidden border transition-all duration-300 group flex flex-col h-full ${
+        isAdded 
+          ? "border-sky-200 shadow-md ring-1 ring-sky-100" 
+          : "border-gray-100 shadow-sm hover:shadow-lg hover:border-gray-200"
+      }`}
     >
       {/* Image */}
       <div className="relative h-32 overflow-hidden shrink-0">
@@ -2007,51 +2043,51 @@ function PlannerCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-            <MapPin className="w-8 h-8 text-gray-200" />
+          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
+            <MapPin className="w-8 h-8 text-gray-300" />
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute top-2 left-2 flex items-center gap-1">
-          <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full shadow-sm uppercase tracking-wider">
-            {item.best_season || "All Year"}
-          </span>
-        </div>
-        <div className="absolute top-2 right-2">
-          <span className="text-[10px] font-bold bg-white/90 backdrop-blur-sm text-gray-700 px-2 py-0.5 rounded-full shadow-sm uppercase tracking-wider border border-gray-100">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+
+        {/* Category badge */}
+        <div className="absolute top-2.5 left-2.5">
+          <span className="text-[10px] font-bold bg-white/95 backdrop-blur-sm text-gray-700 px-2 py-1 rounded-lg shadow-sm border border-gray-100">
             {categories[0] || type}
           </span>
         </div>
 
-        {/* Added Overlay - subtle tint */}
+        {/* Rating badge */}
+        {item.rating && (
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm">
+            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+            <span className="text-[11px] font-bold text-gray-800">{item.rating}</span>
+          </div>
+        )}
+
+        {/* Added checkmark */}
         {isAdded && (
-          <div className="absolute inset-0 bg-emerald-500/10 backdrop-blur-[0.5px] pointer-events-none" />
+          <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center shadow-lg">
+            <Check className="w-3.5 h-3.5 text-white" />
+          </div>
         )}
       </div>
 
       {/* Info */}
-      <div className="p-3 flex flex-col flex-1">
-        <div className="mb-2">
+      <div className="p-3.5 flex flex-col flex-1">
+        <div className="mb-2 flex-1">
           <h4
-            className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight group-hover:text-emerald-600 transition-colors"
+            className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug group-hover:text-sky-600 transition-colors"
             title={item.name_en || item.name}
           >
             {item.name_en || item.name}
           </h4>
-          <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">
-            {item.name}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-1 mb-3 mt-auto">
-          <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-          <span className="text-xs font-bold text-gray-700">
-            {item.rating || "4.0"}
-          </span>
-          <span className="text-[10px] text-gray-400 font-medium ml-0.5">
-            ({Math.floor(Math.random() * 200 + 50)})
-          </span>
+          {item.name !== item.name_en && (
+            <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
+              {item.name}
+            </p>
+          )}
         </div>
 
         <button
@@ -2060,21 +2096,21 @@ function PlannerCard({
             onAdd();
           }}
           disabled={isAdded}
-          className={`w-full py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+          className={`w-full py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
             isAdded
-              ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200 cursor-default"
-              : "bg-gray-50 text-gray-600 border border-gray-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+              ? "bg-sky-50 text-sky-600 border border-sky-200 cursor-default"
+              : "bg-gray-50 text-gray-600 border border-gray-200 hover:bg-sky-500 hover:text-white hover:border-sky-500 hover:shadow-md"
           }`}
         >
           {isAdded ? (
             <>
               <Check className="w-3.5 h-3.5" />
-              Added to Timeline
+              Added
             </>
           ) : (
             <>
-              Add to Timeline
               <Plus className="w-3.5 h-3.5" />
+              Add to Day
             </>
           )}
         </button>
