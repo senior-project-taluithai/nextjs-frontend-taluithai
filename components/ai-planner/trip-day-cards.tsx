@@ -2,13 +2,32 @@
 
 import { Clock, Star, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { PlannedDay } from "@/hooks/useAgentChat";
 
-interface TripDayCardsProps {
-    days: PlannedDay[];
+interface TripDayItem {
+    id?: string;
+    name: string;
+    type: "place" | "event";
+    pg_place_id?: number;
+    raw_id?: number;
+    event_id?: number;
+    latitude?: number;
+    longitude?: number;
+    startTime?: string;
+    endTime?: string;
+    thumbnail_url?: string;
+    rating?: number;
+    category?: string;
 }
 
-export function TripDayCards({ days }: TripDayCardsProps) {
+interface TripDayCardsProps {
+    days: {
+        day: number;
+        items: TripDayItem[];
+    }[];
+    onViewOnMap?: (lat: number, lng: number, id?: string) => void;
+}
+
+export function TripDayCards({ days, onViewOnMap }: TripDayCardsProps) {
     if (!days || days.length === 0) return null;
 
     return (
@@ -21,18 +40,19 @@ export function TripDayCards({ days }: TripDayCardsProps) {
                     </h4>
                     {/* Horizontal scroll container */}
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-                        {day.items.map((item, idx) => (
-                            <div
-                                key={`item-${item.id ?? "no-id"}-${idx}`}
-                                className="flex-none w-44 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                            >
+                        {day.items.map((item, idx) => {
+                            const hasCoords = item.latitude && item.longitude;
+                            const itemId = item.id || `day-${day.day}-item-${idx}-${item.name}`;
+
+                            const content = (
+                                <>
                                 {/* Thumbnail */}
                                 <div className="w-full h-24 bg-muted flex items-center justify-center overflow-hidden">
                                     {item.thumbnail_url ? (
                                         <img
                                             src={item.thumbnail_url}
                                             alt={item.name}
-                                            className="w-full h-full object-cover"
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             onError={(e) => {
                                                 e.currentTarget.style.display = "none";
                                                 e.currentTarget.nextElementSibling?.classList.remove("hidden");
@@ -43,7 +63,7 @@ export function TripDayCards({ days }: TripDayCardsProps) {
                                 </div>
                                 {/* Info */}
                                 <div className="p-2.5">
-                                    <p className="text-xs font-medium line-clamp-2 leading-tight mb-1.5">
+                                    <p className="text-xs font-medium line-clamp-2 leading-tight mb-1.5 group-hover:text-emerald-600 transition-colors">
                                         {item.name}
                                     </p>
                                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -66,8 +86,26 @@ export function TripDayCards({ days }: TripDayCardsProps) {
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        ))}
+                                </>
+                            );
+
+                            return hasCoords ? (
+                                <div
+                                    key={`item-${itemId}`}
+                                    onClick={() => onViewOnMap?.(item.latitude!, item.longitude!, itemId)}
+                                    className="group flex-none w-44 rounded-lg border bg-card shadow-sm hover:shadow-md hover:border-emerald-300 transition-all overflow-hidden cursor-pointer"
+                                >
+                                    {content}
+                                </div>
+                            ) : (
+                                <div
+                                    key={`item-no-id-${idx}`}
+                                    className="flex-none w-44 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                                >
+                                    {content}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             ))}

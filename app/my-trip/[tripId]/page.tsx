@@ -1920,6 +1920,7 @@ function PlannerCard({
   onAdd: () => void;
   isAdded: boolean;
 }) {
+  const router = useRouter();
   const imageUrl = item.thumbnail_url || null;
   const categories = item.categories || [];
 
@@ -1928,7 +1929,8 @@ function PlannerCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={`bg-white rounded-2xl overflow-hidden border transition-all duration-200 group flex flex-col h-full ${
+      onClick={() => router.push(`/${type}/${item.id}`)}
+      className={`bg-white rounded-2xl overflow-hidden border transition-all duration-200 group flex flex-col h-full cursor-pointer ${
         isAdded 
           ? 'border-sky-200 ring-1 ring-sky-100' 
           : 'border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200'

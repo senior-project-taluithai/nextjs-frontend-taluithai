@@ -726,7 +726,7 @@ export default function Home() {
 
           {isLoadingGems ? <LoadingSkeleton /> : (
             <div className="relative z-10 flex gap-5 overflow-x-auto pb-6 scrollbar-hide">
-              {hiddenGems.map((place, i) => <HiddenGemCard key={place.id} place={place} provinces={provinces} delay={i * 0.1} />)}
+              {[...new Map(hiddenGems.map(p => [p.id, p])).values()].map((place, i) => <HiddenGemCard key={place.id} place={place} provinces={provinces} delay={i * 0.1} />)}
             </div>
           )}
         </section>

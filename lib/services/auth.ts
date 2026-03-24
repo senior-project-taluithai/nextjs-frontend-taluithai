@@ -44,6 +44,10 @@ export const authService = {
 
   login: async (data: LoginDto): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>('/auth/login', data);
+    const token = response.data.access_token || response.data.accessToken;
+    if (token && typeof window !== 'undefined') {
+      localStorage.setItem('auth_token', token);
+    }
     return response.data;
   },
 
@@ -52,6 +56,10 @@ export const authService = {
         await api.post('/auth/logout');
     } catch (error) {
         console.error("Logout failed on server", error);
+    } finally {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('auth_token');
+        }
     }
   },
 

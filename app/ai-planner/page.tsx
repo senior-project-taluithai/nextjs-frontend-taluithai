@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { BackgroundMap } from "@/components/ai-planner/background-map";
 import { TripResultPanel } from "@/components/ai-planner/trip-result-panel";
 import { ChatHistorySidebar } from "@/components/ai-planner/chat-history-sidebar";
@@ -12,7 +13,7 @@ import { useSetDayHotel } from "@/hooks/api/useHotels";
 import { useChatConversation, useChatMessages } from "@/hooks/api/useChat";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
-import { MapPin, Bot, Sparkles, Map, X, History } from "lucide-react";
+import { MapPin, Bot, Sparkles, Map, X, History, GripVertical } from "lucide-react";
 
 import {
   useAgentChat,
@@ -30,13 +31,9 @@ import {
 import { MessageResponse } from "@/components/ai/message";
 import { Loader } from "@/components/ai/loader";
 
-/** Strip JSON code blocks from displayed message (trip data already extracted) */
 function stripJsonBlocks(text: string): string {
-  // Remove complete fenced JSON blocks
   let cleaned = text.replace(/```(?:json)?\s*\n[\s\S]*?```/g, "");
-  // Remove truncated/unclosed fenced JSON blocks (when LLM hits token limit mid-output)
   cleaned = cleaned.replace(/```(?:json)?\s*\n[\s\S]*$/g, "");
-  // Remove standalone large JSON objects/arrays that weren't fenced (starts with { or [ on its own line)
   cleaned = cleaned.replace(
     /^\s*(\{[\s\S]*?"(?:hotels|categories|expenses|dailyBudgets)"[\s\S]*)/gm,
     "",
@@ -44,14 +41,6 @@ function stripJsonBlocks(text: string): string {
   return cleaned.trim();
 }
 
-/**
- * Sanitize broken markdown tables.
- * The LLM sometimes:
- * 1) Mixes event descriptions into budget table cells
- * 2) Concatenates multiple rows on one line (| A | B || C | D |)
- * 3) Injects text mid-row (| cost | 500 | 1000festival text... |)
- * This function aggressively cleans tables to ensure they render properly.
- */
 function sanitizeMarkdownTables(text: string): string {
   const lines = text.split("\n");
   const result: string[] = [];
@@ -60,7 +49,6 @@ function sanitizeMarkdownTables(text: string): string {
   while (i < lines.length) {
     const line = lines[i];
 
-    // Detect start of a table block
     if (line.trimStart().startsWith("|")) {
       const rawBlock: string[] = [];
       while (i < lines.length && lines[i].trimStart().startsWith("|")) {
@@ -68,16 +56,13 @@ function sanitizeMarkdownTables(text: string): string {
         i++;
       }
 
-      // Step 1: Split concatenated rows (e.g. "| A | B || C | D |" → two rows)
       const expanded: string[] = [];
       for (const row of rawBlock) {
-        // Split on || which indicates concatenated rows
         const parts = row.split(/\|\|/);
         if (parts.length > 1) {
           for (const part of parts) {
             const trimmed = part.trim();
             if (!trimmed) continue;
-            // Re-add leading/trailing pipes
             const fixed =
               (trimmed.startsWith("|") ? "" : "| ") +
               trimmed +
@@ -89,7 +74,6 @@ function sanitizeMarkdownTables(text: string): string {
         }
       }
 
-      // Step 2: Filter valid rows (start+end with |, have 3+ pipe segments)
       const validRows = expanded.filter((row) => {
         const t = row.trim();
         return t.startsWith("|") && t.endsWith("|") && t.split("|").length >= 3;
@@ -100,26 +84,18 @@ function sanitizeMarkdownTables(text: string): string {
         continue;
       }
 
-      // Step 3: Determine column count from header
       const headerCols = validRows[0].split("|").length;
 
-      // Step 4: Clean each row — remove injected text from cells
       const cleanedRows: string[] = [];
       for (const row of validRows) {
         const cells = row.split("|").map((c) => c.trim());
-        // Skip if column count doesn't match header
         if (cells.length !== headerCols) continue;
 
-        // Clean each cell: if a cell looks like "1000กระทงสุโขทัย จัดขึ้น..."
-        // extract just the number part
         const cleanCells = cells.map((cell, idx) => {
-          if (idx === 0 || idx === cells.length - 1) return cell; // empty edge cells
-          // If cell contains a number followed by Thai/non-numeric text, keep only the number
+          if (idx === 0 || idx === cells.length - 1) return cell;
           const numMatch = cell.match(/^(\d[\d,.]*)(?:[ก-๙a-zA-Z])/);
           if (numMatch) return numMatch[1];
-          // If cell is too long (>40 chars) and not the separator, it has injected text
           if (cell.length > 40 && !/^[-:\s]+$/.test(cell)) {
-            // Try to extract just the first meaningful part (before any date/event text)
             const shortMatch = cell.match(
               /^(.{1,30}?)(?:\d\.\s|จัดขึ้น|เทศกาล|งาน|festival)/i,
             );
@@ -137,7 +113,6 @@ function sanitizeMarkdownTables(text: string): string {
         continue;
       }
 
-      // Step 5: Ensure separator row exists
       const sep = cleanedRows[1].trim();
       const isSep = /^\|[\s-:|]+\|$/.test(sep);
       if (!isSep) {
@@ -160,11 +135,9 @@ function sanitizeMarkdownTables(text: string): string {
   return result.join("\n");
 }
 
-/** Component that reveals text progressively after stream completes */
 function TypewriterMessage({ text }: { text: string }) {
   const [visibleText, setVisibleText] = useState("");
 
-  // Characters per second
   const CHARS_PER_SECOND = 800;
 
   useEffect(() => {
@@ -200,16 +173,13 @@ function TypewriterMessage({ text }: { text: string }) {
   return <MessageResponse>{visibleText}</MessageResponse>;
 }
 
-// Map our ToolCall state to shadcn Tool component
 const TOOL_LABELS: Record<string, string> = {
-  // Sub-agent tools (high-level)
   recommend_places: "Searching for recommended places",
   plan_trip: "Planning your trip",
   estimate_budget: "Estimating budget",
   optimize_route: "Calculating route",
   find_events: "Searching for festivals & events",
   webSearch: "Searching the web",
-  // Graph nodes
   agent: "Processing",
   tools: "Running tools",
 };
@@ -290,11 +260,22 @@ export default function AIPlannerPage() {
   const [activeMobilePanel, setActiveMobilePanel] = useState<
     "trip" | "map" | "chat"
   >("chat");
+  const [focusedLocation, setFocusedLocation] = useState<{lat: number, lng: number, id?: string | number} | null>(null);
 
   const hotelAssignmentsRef = useRef(hotelAssignments);
   hotelAssignmentsRef.current = hotelAssignments;
 
-  // Load messages when conversation changes
+  const handleViewOnMap = (lat: any, lng: any, id?: string | number) => {
+    const numLat = parseFloat(lat);
+    const numLng = parseFloat(lng);
+    if (!isNaN(numLat) && !isNaN(numLng)) {
+      setFocusedLocation({ lat: numLat, lng: numLng, id });
+      setActiveMobilePanel("map");
+    } else {
+      toast.error("Location coordinates are currently unavailable for this place.");
+    }
+  };
+
   useEffect(() => {
     if (messagesData?.data && messagesData.data.length > 0) {
       const loadedMessages = messagesData.data.map((msg) => ({
@@ -311,18 +292,16 @@ export default function AIPlannerPage() {
     } else if (!activeConversationId) {
       setIsNewChat(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messagesData, activeConversationId, activeConversation?.threadId]);
 
-  // Sync threadId to conversation
   useEffect(() => {
     if (activeConversation?.threadId && !isNewChat) {
       updateThreadId(activeConversation.threadId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversation?.threadId, isNewChat]);
 
-  // Sync trip data from agent response
   useEffect(() => {
     if (tripData) {
       setTrip(tripData);
@@ -331,12 +310,9 @@ export default function AIPlannerPage() {
     }
   }, [tripData]);
 
-  // Debounce ref for route planner
   const routePlannerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Debounce ref for hotel updates
   const hotelUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-call route planner when tripData is available with hotel data from any source
   useEffect(() => {
     if (routePlannerTimeoutRef.current) {
       clearTimeout(routePlannerTimeoutRef.current);
@@ -432,10 +408,9 @@ export default function AIPlannerPage() {
         clearTimeout(routePlannerTimeoutRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData, hotelData]);
 
-  // Handle hotel assignment changes with debounced PATCH call
   useEffect(() => {
     if (hotelUpdateTimeoutRef.current) {
       clearTimeout(hotelUpdateTimeoutRef.current);
@@ -486,10 +461,9 @@ export default function AIPlannerPage() {
         clearTimeout(hotelUpdateTimeoutRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelAssignments, routePlanId, hotelData]);
 
-  // Load route plan from DB if we have a planId but no routeData
   useEffect(() => {
     if (routePlanId && !routeData) {
       fetchRoutePlanById(routePlanId).then((data) => {
@@ -498,7 +472,7 @@ export default function AIPlannerPage() {
         }
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routePlanId, routeData]);
 
   const handleSubmit = () => {
@@ -513,7 +487,7 @@ export default function AIPlannerPage() {
     setIsConfirming(true);
     try {
       let provinceId =
-        provinces && provinces.length > 0 ? provinces[0].id : 230; // 230 is Prachin Buri as fallback if provinces didn't load
+        provinces && provinces.length > 0 ? provinces[0].id : 230;
       if (trip.province && provinces) {
         const tripProvRaw = trip.province as string;
         const searchStr = tripProvRaw.trim().toLowerCase();
@@ -546,7 +520,6 @@ export default function AIPlannerPage() {
         for (const item of day.items) {
           try {
             if (item.type === "event" && item.event_id) {
-              // Add event item
               await addTripItemMutation.mutateAsync({
                 tripId,
                 dayNumber: day.day,
@@ -562,7 +535,6 @@ export default function AIPlannerPage() {
               item.type === "place" &&
               (item.pg_place_id || item.raw_id)
             ) {
-              // Add place item
               const placeId = item.pg_place_id || item.raw_id;
               await addTripItemMutation.mutateAsync({
                 tripId,
@@ -586,8 +558,6 @@ export default function AIPlannerPage() {
         }
       }
 
-      // Save hotels: prefer user's hotelAssignments (direct selections),
-      // fallback to routeData (auto-assigned by route planner)
       const numNights = trip.days.length - 1;
       let hasHotelsSaved = false;
 
@@ -595,7 +565,6 @@ export default function AIPlannerPage() {
         Object.keys(hotelAssignments).length > 0 &&
         hotelData?.hotels?.length
       ) {
-        // Use the user's explicit hotel selections
         for (let night = 1; night <= numNights; night++) {
           const hotelIdx = hotelAssignments[night];
           if (hotelIdx === undefined || hotelIdx === null) continue;
@@ -622,7 +591,6 @@ export default function AIPlannerPage() {
           }
         }
       } else if (routeData?.itinerary && routeData.itinerary.length > 0) {
-        // Fallback: use auto-assigned hotels from route planner
         for (const dayItinerary of routeData.itinerary) {
           const hotelStop = dayItinerary.route?.find(
             (stop) => stop.type === "hotel" && stop.hotel_id,
@@ -654,7 +622,6 @@ export default function AIPlannerPage() {
         }
       }
 
-      // Show info message for day trips without hotels
       if (numNights <= 0 && !hasHotelsSaved) {
         toast.info("Day trip created! No overnight stay needed.");
       }
@@ -670,17 +637,53 @@ export default function AIPlannerPage() {
     }
   };
 
-  // Flatten items for map display
-  const tripMapItems = trip.days.flatMap((d) =>
-    d.items.map((i) => ({
-      ...i,
-      id: i.id || Math.random().toString(36).substr(2, 9),
-    })),
+  const tripMapItems: {
+    id: string;
+    name: string;
+    type?: string;
+    category?: string;
+    latitude: number;
+    longitude: number;
+    rating?: number;
+    thumbnail_url?: string;
+    event_id?: number;
+    pg_place_id?: number;
+    raw_id?: number;
+    itemType?: "place" | "event" | "hotel";
+  }[] = trip.days.flatMap((d) =>
+    d.items
+      .filter((i): i is typeof i & { latitude: number; longitude: number } => 
+        i.latitude !== undefined && i.longitude !== undefined
+      )
+      .map((i, idx) => ({
+        id: i.id || `place-${d.day}-${idx}-${i.name}`,
+        name: i.name,
+        type: i.type,
+        category: i.category,
+        latitude: i.latitude,
+        longitude: i.longitude,
+        rating: i.rating,
+        thumbnail_url: i.thumbnail_url,
+        event_id: i.event_id,
+        pg_place_id: i.pg_place_id,
+        raw_id: i.raw_id,
+        itemType: i.type as "place" | "event",
+      })),
   );
 
-  // Include hotels on map
-  const hotelMapItems =
-    hotelData?.hotels?.map((h, idx) => ({
+  const hotelMapItems: {
+    id: string;
+    name: string;
+    category?: string;
+    latitude: number;
+    longitude: number;
+    rating?: number;
+    thumbnail_url?: string;
+    priceRange?: string;
+    bookingUrl?: string;
+    address?: string;
+    itemType: "hotel";
+  }[] = hotelData?.hotels?.map((h, idx) => ({
       id: `hotel-${idx}-${h.name}`,
       name: h.name,
       category: "hotel",
@@ -691,11 +694,11 @@ export default function AIPlannerPage() {
       priceRange: h.priceRange,
       bookingUrl: h.bookingUrl,
       address: h.address,
+      itemType: "hotel" as const,
     })) || [];
 
   const mapItems = [...tripMapItems, ...hotelMapItems];
 
-  // Build route geometries for map polylines
   const routeGeometries =
     routeData?.itinerary
       ?.filter((day) => day.geometry?.coordinates?.length)
@@ -708,48 +711,309 @@ export default function AIPlannerPage() {
     (a, b) => a - b,
   );
 
-  return (
-    <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
-      {/* Trip Result Panel (left) - hidden on mobile unless active */}
-      <div
-        className={`
-        relative z-10 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 shadow-sm
-        w-0 lg:w-[280px] xl:w-[320px]
-        transition-all duration-300 overflow-hidden
-        ${activeMobilePanel === "trip" ? "w-full lg:w-[280px] xl:w-[320px] !overflow-auto" : "w-0 lg:w-[280px] xl:w-[320px]"}
-        hidden lg:flex
-      `}
-      >
-        <TripResultPanel
-          tripName={trip.name}
-          days={trip.days}
-          budget={trip.budget}
-          budgetData={budgetData}
-          hotelData={hotelData}
-          routeData={routeData}
-          selectedHotelIndexes={selectedHotelIndexes}
-          onSelectHotel={onSelectHotel}
-          hotelAssignments={hotelAssignments}
-          onAssignHotel={onAssignHotel}
-          onOptimizeHotels={optimizeHotelAssignments}
-          onConfirm={handleConfirmTrip}
-          isConfirming={isConfirming}
-        />
-      </div>
-
-      {/* Mobile overlay for Trip Panel */}
-      {activeMobilePanel === "trip" && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-white flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-            <h3 className="font-bold text-gray-900 text-sm">Trip Plan</h3>
+  const ChatPanelContent = () => (
+    <>
+      <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-md shrink-0">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 text-sm">TaluiThai AI</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs text-emerald-600 font-medium">
+                Plan Trip
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+            title="Chat History"
+          >
+            <History className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        {activeConversation && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-600 truncate">
+                {activeConversation.title || "New Chat"}
+              </p>
+            </div>
             <button
-              onClick={() => setActiveMobilePanel("map")}
-              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
+              onClick={() => {
+                setActiveConversationId(null);
+                reset();
+              }}
+              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
             >
-              <X className="w-4 h-4" />
+              New Chat
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-2 sm:px-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
+              <Bot className="w-6 h-6 text-emerald-500" />
+            </div>
+            <p className="text-sm font-semibold text-gray-900 mb-1">
+              Welcome to TaluiThai AI
+            </p>
+            <p className="text-xs text-gray-500">
+              Tell me where you want to go and how many days — I&apos;ll help
+              plan your trip!
+            </p>
+          </div>
+        ) : (
+          messages
+            .filter((msg) => {
+              if (msg.role !== "assistant") return true;
+              const isCurrentlyStreamingMsg =
+                isStreaming && msg === messages[messages.length - 1];
+              if (isCurrentlyStreamingMsg) return true;
+              const cleaned = msg.content ? stripJsonBlocks(msg.content) : "";
+              return (
+                cleaned.trim().length > 0 ||
+                (msg.toolCalls && msg.toolCalls.length > 0)
+              );
+            })
+            .map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
+              >
+                {msg.role === "user" ? (
+                  <>
+                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
+                      <svg
+                        className="w-3.5 h-3.5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </div>
+                    <div className="max-w-[85%] relative">
+                      <div
+                        className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
+                        }}
+                      >
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
+                      <Bot className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <div className="flex-1 max-w-[calc(100%-2rem)]">
+                      <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
+                        {(() => {
+                          const isCurrentlyStreaming =
+                            isStreaming &&
+                            msg === messages[messages.length - 1];
+                          const cleanText = msg.content
+                            ? stripJsonBlocks(msg.content)
+                            : "";
+                          return (
+                            <div className="space-y-2">
+                              {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                <div className="space-y-2">
+                                  {msg.toolCalls.map((tc: ToolCall) => (
+                                    <ToolCallDisplay
+                                      key={tc.id}
+                                      toolCall={tc}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
+                              {isCurrentlyStreaming ? (
+                                !cleanText && !msg.toolCalls?.length ? (
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Loader size={14} />
+                                    <span className="text-xs">
+                                      Thinking...
+                                    </span>
+                                  </div>
+                                ) : msg.toolCalls?.length ? (
+                                  <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                                    <Loader size={14} />
+                                    <span className="text-xs">
+                                      Processing...
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Loader size={14} />
+                                    <span className="text-xs">
+                                      Writing response...
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                (() => {
+                                  const sanitized = cleanText
+                                    ? sanitizeMarkdownTables(cleanText)
+                                    : "";
+                                  const isLatest =
+                                    msg === messages[messages.length - 1];
+                                  return (
+                                    <>
+                                      {sanitized ? (
+                                        isLatest ? (
+                                          <div className="whitespace-pre-wrap">
+                                            <TypewriterMessage
+                                              text={sanitized}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div className="whitespace-pre-wrap">
+                                            <MessageResponse>
+                                              {sanitized}
+                                            </MessageResponse>
+                                          </div>
+                                        )
+                                      ) : null}
+                                      {trip.days.length > 0 && isLatest && (
+                                        <TripDayCards days={trip.days} onViewOnMap={handleViewOnMap} />
+                                      )}
+                                    </>
+                                  );
+                                })()
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+        )}
+        <div className="h-4" />
+      </div>
+
+      {messages.length === 0 && (
+        <div className="px-3 sm:px-4 pb-3">
+          <p className="text-xs text-gray-400 mb-2">Quick start:</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              {
+                text: "3 days Krabi",
+                prompt: "Plan a 3-day trip to Krabi for beach lovers",
+              },
+              {
+                text: "Temple Tour",
+                prompt: "Plan a 2-day cultural temple tour in Chiang Mai",
+              },
+              {
+                text: "Nature Hiking",
+                prompt: "Plan a nature and hiking trip in Northern Thailand",
+              },
+              {
+                text: "Family Trip",
+                prompt: "Plan a 4-day family trip to Phuket",
+              },
+            ].map((qp) => (
+              <button
+                key={qp.text}
+                onClick={() => sendMessage(qp.prompt)}
+                className="flex items-center justify-center px-2 py-2 bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 border border-gray-100 hover:border-emerald-200 rounded-xl text-[11px] text-gray-600 transition-all text-center"
+              >
+                {qp.text}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="px-3 sm:px-4 py-3 border-t border-gray-100 bg-white shrink-0">
+        <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20 transition-all">
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="Plan a trip..."
+            className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-gray-700 placeholder-gray-400"
+          />
+          {isStreaming ? (
+            <button
+              onClick={stop}
+              className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 transition-all shrink-0"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <rect x="6" y="6" width="12" height="12" rx="2" ry="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSubmit()}
+              disabled={!text.trim()}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0 ${text.trim() ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-200" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m22 2-7 20-4-9-9-4Z" />
+                <path d="M22 2 11 13" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
+      {/* Desktop: Resizable Panels */}
+      <div className="hidden lg:flex flex-1 h-full w-full">
+        <Group id="desktop-planner-group" orientation="horizontal" className="w-full h-full">
+        {/* Trip Result Panel (left) */}
+        <Panel defaultSize="20%" minSize="15%" maxSize="35%">
+          <div className="h-full bg-white border-r border-gray-100 shadow-sm">
             <TripResultPanel
               tripName={trip.name}
               days={trip.days}
@@ -764,325 +1028,90 @@ export default function AIPlannerPage() {
               onOptimizeHotels={optimizeHotelAssignments}
               onConfirm={handleConfirmTrip}
               isConfirming={isConfirming}
+              onViewOnMap={handleViewOnMap}
             />
           </div>
-        </div>
-      )}
+        </Panel>
 
-      {/* Center Area (Map) */}
-      <div className="flex-1 relative overflow-hidden bg-muted/10">
-        <div className="absolute inset-0">
-          <BackgroundMap items={mapItems} routeGeometries={routeGeometries} />
-        </div>
-        <RouteLegend days={uniqueDays} />
+        <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
+          <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
+            <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
+          </div>
+        </Separator>
+
+        {/* Center Map Area */}
+        <Panel>
+          <div className="h-full relative overflow-hidden bg-muted/10">
+            <div className="absolute inset-0">
+              <BackgroundMap items={mapItems} routeGeometries={routeGeometries} focusedLocation={focusedLocation} />
+            </div>
+            <RouteLegend days={uniqueDays} />
+          </div>
+        </Panel>
+
+        <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
+          <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
+            <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
+          </div>
+        </Separator>
+
+        {/* Chat Panel (right) */}
+        <Panel defaultSize="25%" minSize="20%" maxSize="40%">
+          <div className="h-full flex flex-col bg-white border-l border-gray-100 shadow-sm overflow-hidden">
+            <ChatPanelContent />
+          </div>
+        </Panel>
+        </Group>
       </div>
 
-      {/* Chat Panel (right) - full width on mobile */}
-      <div
-        className={`
-        flex flex-col bg-white border-l border-gray-100 shadow-sm relative overflow-hidden z-10
-        w-full sm:w-[400px] md:w-[400px] lg:w-[360px] xl:w-[400px]
-        ${activeMobilePanel === "chat" ? "flex" : "hidden sm:flex"}
-      `}
-      >
-        {/* Chat Header */}
-        <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-md shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 text-sm">TaluiThai AI</h3>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs text-emerald-600 font-medium">
-                  Plan Trip
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsHistoryOpen(true)}
-              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
-              title="Chat History"
-            >
-              <History className="w-4 h-4 text-gray-500" />
-            </button>
-          </div>
-          {activeConversation && (
-            <div className="mt-2 flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-600 truncate">
-                  {activeConversation.title || "New Chat"}
-                </p>
-              </div>
+      {/* Mobile: Full-screen panels with bottom navigation */}
+      <div className="lg:hidden flex-1 flex flex-col">
+        {activeMobilePanel === "trip" && (
+          <div className="fixed inset-0 z-50 bg-white flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+              <h3 className="font-bold text-gray-900 text-sm">Trip Plan</h3>
               <button
-                onClick={() => {
-                  setActiveConversationId(null);
-                  reset();
-                }}
-                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                onClick={() => setActiveMobilePanel("map")}
+                className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
               >
-                New Chat
+                <X className="w-4 h-4" />
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-2 sm:px-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
-                <Bot className="w-6 h-6 text-emerald-500" />
-              </div>
-              <p className="text-sm font-semibold text-gray-900 mb-1">
-                Welcome to TaluiThai AI
-              </p>
-              <p className="text-xs text-gray-500">
-                Tell me where you want to go and how many days — I&apos;ll help
-                plan your trip!
-              </p>
-            </div>
-          ) : (
-            messages
-              .filter((msg) => {
-                // Skip non-streaming assistant messages with empty content after JSON stripping
-                if (msg.role !== "assistant") return true;
-                const isCurrentlyStreamingMsg =
-                  isStreaming && msg === messages[messages.length - 1];
-                if (isCurrentlyStreamingMsg) return true;
-                const cleaned = msg.content ? stripJsonBlocks(msg.content) : "";
-                return (
-                  cleaned.trim().length > 0 ||
-                  (msg.toolCalls && msg.toolCalls.length > 0)
-                );
-              })
-              .map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse items-end" : "items-end"}`}
-                >
-                  {msg.role === "user" ? (
-                    <>
-                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200 mb-1">
-                        <svg
-                          className="w-3.5 h-3.5 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                      </div>
-                      <div className="max-w-[85%] relative">
-                        <div
-                          className="rounded-2xl rounded-br-sm px-3 sm:px-3.5 py-2.5 text-white shadow-md shadow-emerald-200/50"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
-                          }}
-                        >
-                          <p className="text-xs leading-relaxed whitespace-pre-wrap">
-                            {msg.content}
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-200 mb-1">
-                        <Bot className="w-3.5 h-3.5 text-white" />
-                      </div>
-                      <div className="flex-1 max-w-[calc(100%-2rem)]">
-                        <div className="bg-gray-50 text-gray-700 border border-gray-100 rounded-2xl rounded-bl-sm px-3 sm:px-3.5 py-2.5 shadow-sm text-xs leading-relaxed">
-                          {(() => {
-                            const isCurrentlyStreaming =
-                              isStreaming &&
-                              msg === messages[messages.length - 1];
-                            const cleanText = msg.content
-                              ? stripJsonBlocks(msg.content)
-                              : "";
-                            return (
-                              <div className="space-y-2">
-                                {/* Tool calls */}
-                                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                  <div className="space-y-2">
-                                    {msg.toolCalls.map((tc: ToolCall) => (
-                                      <ToolCallDisplay
-                                        key={tc.id}
-                                        toolCall={tc}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-
-                                {isCurrentlyStreaming ? (
-                                  !cleanText && !msg.toolCalls?.length ? (
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Loader size={14} />
-                                      <span className="text-xs">
-                                        Thinking...
-                                      </span>
-                                    </div>
-                                  ) : msg.toolCalls?.length ? (
-                                    <div className="flex items-center gap-2 text-muted-foreground mt-2">
-                                      <Loader size={14} />
-                                      <span className="text-xs">
-                                        Processing...
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Loader size={14} />
-                                      <span className="text-xs">
-                                        Writing response...
-                                      </span>
-                                    </div>
-                                  )
-                                ) : (
-                                  /* Done streaming */
-                                  (() => {
-                                    const sanitized = cleanText
-                                      ? sanitizeMarkdownTables(cleanText)
-                                      : "";
-                                    const isLatest =
-                                      msg === messages[messages.length - 1];
-                                    return (
-                                      <>
-                                        {sanitized ? (
-                                          isLatest ? (
-                                            <div className="whitespace-pre-wrap">
-                                              <TypewriterMessage
-                                                text={sanitized}
-                                              />
-                                            </div>
-                                          ) : (
-                                            <div className="whitespace-pre-wrap">
-                                              <MessageResponse>
-                                                {sanitized}
-                                              </MessageResponse>
-                                            </div>
-                                          )
-                                        ) : null}
-                                        {trip.days.length > 0 && isLatest && (
-                                          <TripDayCards days={trip.days} />
-                                        )}
-                                      </>
-                                    );
-                                  })()
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))
-          )}
-          {/* Add spacer at bottom for scrolling */}
-          <div className="h-4" />
-        </div>
-
-        {/* Quick Prompts (only shown initially) */}
-        {messages.length === 0 && (
-          <div className="px-3 sm:px-4 pb-3">
-            <p className="text-xs text-gray-400 mb-2">Quick start:</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                {
-                  text: "3 days Krabi",
-                  prompt: "Plan a 3-day trip to Krabi for beach lovers",
-                },
-                {
-                  text: "Temple Tour",
-                  prompt: "Plan a 2-day cultural temple tour in Chiang Mai",
-                },
-                {
-                  text: "Nature Hiking",
-                  prompt: "Plan a nature and hiking trip in Northern Thailand",
-                },
-                {
-                  text: "Family Trip",
-                  prompt: "Plan a 4-day family trip to Phuket",
-                },
-              ].map((qp) => (
-                <button
-                  key={qp.text}
-                  onClick={() => sendMessage(qp.prompt)}
-                  className="flex items-center justify-center px-2 py-2 bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 border border-gray-100 hover:border-emerald-200 rounded-xl text-[11px] text-gray-600 transition-all text-center"
-                >
-                  {qp.text}
-                </button>
-              ))}
+            <div className="flex-1 overflow-y-auto">
+              <TripResultPanel
+                tripName={trip.name}
+                days={trip.days}
+                budget={trip.budget}
+                budgetData={budgetData}
+                hotelData={hotelData}
+                routeData={routeData}
+                selectedHotelIndexes={selectedHotelIndexes}
+                onSelectHotel={onSelectHotel}
+                hotelAssignments={hotelAssignments}
+                onAssignHotel={onAssignHotel}
+                onOptimizeHotels={optimizeHotelAssignments}
+                onConfirm={handleConfirmTrip}
+                isConfirming={isConfirming}
+                onViewOnMap={handleViewOnMap}
+              />
             </div>
           </div>
         )}
 
-        {/* Input Area */}
-        <div className="px-3 sm:px-4 py-3 border-t border-gray-100 bg-white shrink-0">
-          <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20 transition-all">
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Plan a trip..."
-              className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-gray-700 placeholder-gray-400"
-            />
-            {isStreaming ? (
-              <button
-                onClick={stop}
-                className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 transition-all shrink-0"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  stroke="none"
-                >
-                  <rect x="6" y="6" width="12" height="12" rx="2" ry="2" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleSubmit()}
-                disabled={!text.trim()}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0 ${text.trim() ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-200" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m22 2-7 20-4-9-9-4Z" />
-                  <path d="M22 2 11 13" />
-                </svg>
-              </button>
-            )}
+        {activeMobilePanel === "map" && (
+          <div className="flex-1 relative overflow-hidden bg-muted/10">
+            <div className="absolute inset-0">
+              <BackgroundMap items={mapItems} routeGeometries={routeGeometries} focusedLocation={focusedLocation} />
+            </div>
+            <RouteLegend days={uniqueDays} />
           </div>
-        </div>
+        )}
+
+        {activeMobilePanel === "chat" && (
+          <div className="flex-1 flex flex-col bg-white overflow-hidden">
+            <ChatPanelContent />
+          </div>
+        )}
       </div>
 
       {/* Mobile Bottom Navigation */}

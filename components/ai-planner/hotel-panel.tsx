@@ -33,6 +33,7 @@ interface HotelPanelProps {
   hotelAssignments?: Record<number, number>;
   onAssignHotel?: (night: number, hotelIndex: number) => void;
   onOptimizeHotels?: () => void;
+  onViewOnMap?: (lat: number, lng: number, id?: string) => void;
 }
 
 async function getFullBookingUrl(
@@ -170,14 +171,18 @@ function AmenityBadge({ amenity }: { amenity: string }) {
 
 function HotelCard({
   hotel,
+  id,
   isSelected,
   onSelect,
   assignedNights,
+  onViewOnMap,
 }: {
   hotel: HotelItem;
   isSelected?: boolean;
   onSelect?: () => void;
   assignedNights?: number[];
+  onViewOnMap?: (lat: number, lng: number, id?: string) => void;
+  id?: string;
 }) {
   const [isLoadingUrl, setIsLoadingUrl] = useState<string | null>(null);
   const [lookedUpBookingUrl, setLookedUpBookingUrl] = useState<string | null>(
@@ -251,7 +256,7 @@ function HotelCard({
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">
                 {hotel.name}
               </h4>
@@ -263,14 +268,28 @@ function HotelCard({
                 </span>
               )}
             </div>
-            {hotel.address && (
-              <div className="flex items-start gap-1 mt-1">
-                <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-gray-500 line-clamp-1">
-                  {hotel.address}
-                </p>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {hotel.address && (
+                <div className="flex items-start gap-1">
+                  <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-gray-500 line-clamp-1">
+                    {hotel.address}
+                  </p>
+                </div>
+              )}
+              {onViewOnMap && hotel.latitude && hotel.longitude && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewOnMap(hotel.latitude!, hotel.longitude!, id);
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 hover:text-emerald-700 px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors"
+                >
+                  <MapPin className="w-2.5 h-2.5" />
+                  Map
+                </button>
+              )}
+            </div>
           </div>
           {hotel.rating > 0 && (
             <div className="flex items-center gap-1 shrink-0 bg-amber-50 px-2 py-1 rounded-lg">
@@ -430,6 +449,7 @@ export function HotelPanel({
   hotelAssignments,
   onAssignHotel,
   onOptimizeHotels,
+  onViewOnMap,
 }: HotelPanelProps) {
   if (!data || data.hotels.length === 0) {
     return (
@@ -567,9 +587,11 @@ export function HotelPanel({
           <HotelCard
             key={`${hotel.name}-${idx}`}
             hotel={hotel}
+            id={`hotel-${idx}-${hotel.name}`}
             isSelected={selectedIndexes?.has(idx)}
             onSelect={() => onSelectHotel?.(idx)}
             assignedNights={getAssignedNightsForHotel(idx)}
+            onViewOnMap={onViewOnMap}
           />
         ))}
       </div>
