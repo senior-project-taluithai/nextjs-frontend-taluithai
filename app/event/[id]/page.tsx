@@ -39,7 +39,7 @@ import {
   useSpring,
   useTransform,
 } from "motion/react";
-import { useEvent, useAddEventReview } from "@/hooks/api/useEvents";
+import { useEvent, useAddEventReview, useTiktokVideos } from "@/hooks/api/useEvents";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import {
   useToggleFavoriteEvent,
@@ -327,11 +327,13 @@ export default function EventDetailPage({
   const [userRating, setUserRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "photos">(
+  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "photos" | "tiktok">(
     "overview",
   );
   const [scrollY, setScrollY] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState<number | null>(null);
+  const { data: tiktokVideos = [], isLoading: isLoadingTiktok } =
+    useTiktokVideos(eventId);
 
   useEffect(() => {
     if (event)
@@ -723,7 +725,7 @@ export default function EventDetailPage({
             {/* Tabs */}
             <StaggerItem index={1}>
               <div className="flex gap-1 bg-white rounded-2xl p-1.5 mb-6 shadow-sm border border-gray-100 overflow-x-auto scrollbar-hide">
-                {(["overview", "reviews", "photos"] as const).map((tab) => (
+                {(["overview", "reviews", "photos", "tiktok"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -742,11 +744,21 @@ export default function EventDetailPage({
                         : { fontWeight: 500 }
                     }
                   >
+                    {tab === "tiktok" && (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-3.5 h-3.5 fill-current"
+                      >
+                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.75a4.85 4.85 0 0 1-1.01-.06z" />
+                      </svg>
+                    )}
                     {tab === "overview"
                       ? "Overview"
                       : tab === "reviews"
                         ? `Reviews`
-                        : "Photos"}
+                        : tab === "photos"
+                          ? "Photos"
+                          : "TikTok"}
                     {tab === "reviews" && (
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded-md ${activeTab === tab ? "bg-white/20" : "bg-gray-100 text-gray-400"}`}
@@ -1131,7 +1143,7 @@ export default function EventDetailPage({
                             ? "col-span-2 row-span-2 md:h-[280px]"
                             : "h-[136px]"
                         }`}
-                        style={{ height: i !== 0 ? "136px" : undefined }} // Set fixed height except for first on desktop
+                        style={{ height: i !== 0 ? "136px" : undefined }}
                       >
                         <Image
                           src={img}
@@ -1151,6 +1163,82 @@ export default function EventDetailPage({
                       </motion.div>
                     ))}
                   </div>
+                </motion.div>
+              )}
+
+              {activeTab === "tiktok" && (
+                <motion.div
+                  key="tiktok"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Play className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm text-gray-500">
+                        TikTok Videos
+                      </span>
+                    </div>
+                    <button
+                      onClick={() =>
+                        window.open(
+                          `https://www.tiktok.com/search?q=${encodeURIComponent(event.name_en)}`,
+                          "_blank",
+                        )
+                      }
+                      className="flex items-center gap-1.5 text-sm text-pink-600 hover:text-pink-700 font-medium transition-colors"
+                    >
+                      Open in TikTok
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {isLoadingTiktok ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+                      {[...Array(2)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-[400px] bg-white rounded-2xl p-4 shadow-sm animate-pulse border border-gray-100 flex items-center justify-center text-gray-400"
+                        >
+                          <Loader2 className="w-8 h-8 animate-spin" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : tiktokVideos.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+                      {tiktokVideos.map((url) => {
+                        const videoIdMatch = url.match(/\/video\/(\d+)/);
+                        const videoId = videoIdMatch ? videoIdMatch[1] : "";
+                        return videoId ? (
+                          <div
+                            key={url}
+                            className="flex justify-center bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 h-[600px]"
+                          >
+                            <iframe
+                              src={`https://www.tiktok.com/embed/v2/${videoId}?lang=en-US`}
+                              width="325"
+                              height="600"
+                              frameBorder="0"
+                              allow="encrypted-media;"
+                              title="TikTok video"
+                              className="w-full h-full"
+                            ></iframe>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm text-center">
+                      <Play className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                      <p className="text-gray-500 font-medium text-lg">
+                        No TikTok videos found
+                      </p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        There are no videos tagged with this event yet.
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

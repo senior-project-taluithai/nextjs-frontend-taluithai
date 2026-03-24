@@ -68,4 +68,11 @@ export const eventService = {
     );
     return response.data;
   },
+
+  getTiktokVideos: async (id: number): Promise<string[]> => {
+    const response = await api.get<{ videos: string[] }>(
+      `/events/${id}/tiktok-videos`,
+    );
+    return response.data.videos;
+  },
 };
