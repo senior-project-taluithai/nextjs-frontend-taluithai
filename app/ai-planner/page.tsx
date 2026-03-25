@@ -734,7 +734,7 @@ export default function AIPlannerPage() {
     (a, b) => a - b,
   );
 
-  const ChatPanelContent = () => (
+  const renderChatPanel = () => (
     <>
       <div className="px-4 py-3.5 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -1081,7 +1081,7 @@ export default function AIPlannerPage() {
         {/* Chat Panel (right) */}
         <Panel defaultSize="25%" minSize="20%" maxSize="40%">
           <div className="h-full flex flex-col bg-white border-l border-gray-100 shadow-sm overflow-hidden">
-            <ChatPanelContent />
+            {renderChatPanel()}
           </div>
         </Panel>
         </Group>
@@ -1132,7 +1132,7 @@ export default function AIPlannerPage() {
 
         {activeMobilePanel === "chat" && (
           <div className="flex-1 flex flex-col bg-white overflow-hidden">
-            <ChatPanelContent />
+            {renderChatPanel()}
           </div>
         )}
       </div>
