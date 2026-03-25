@@ -1,5 +1,8 @@
 import { api } from "../api-client";
 import { Event, CreateEventDto } from "../dtos/event.dto";
+import type { ExploreEventsQuery } from "../dtos/event.dto";
+import type { PaginatedResponse } from "../dtos/pagination.dto";
+import type { MapQueryParams, MapEventsResponse, MapSummaryQueryParams, MapSummaryResponse } from "../dtos/map.dto";
 
 export const eventService = {
   getAll: async (): Promise<Event[]> => {
@@ -31,12 +34,8 @@ export const eventService = {
     return response.data;
   },
 
-  explore: async (
-    query: import("../dtos/event.dto").ExploreEventsQuery,
-  ): Promise<import("../dtos/pagination.dto").PaginatedResponse<Event>> => {
-    const response = await api.post<
-      import("../dtos/pagination.dto").PaginatedResponse<Event>
-    >("/events/explore", query);
+  explore: async (query: ExploreEventsQuery): Promise<PaginatedResponse<Event>> => {
+    const response = await api.post<PaginatedResponse<Event>>("/events/explore", query);
     return response.data;
   },
 
@@ -54,7 +53,7 @@ export const eventService = {
     id: number,
     comment: string,
     rating: number,
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     const response = await api.post(`/events/${id}/reviews`, {
       comment,
       rating,
@@ -74,5 +73,37 @@ export const eventService = {
       `/events/${id}/tiktok-videos`,
     );
     return response.data.videos;
+  },
+
+  getMapEvents: async (query: MapQueryParams): Promise<MapEventsResponse> => {
+    const response = await api.get<MapEventsResponse>("/events/map", {
+      params: {
+        north: query.north,
+        south: query.south,
+        east: query.east,
+        west: query.west,
+        zoom: query.zoom,
+        ...(query.provinceIds && query.provinceIds.length > 0
+          ? { province_ids: query.provinceIds.join(",") }
+          : {}),
+        ...(query.categoryId ? { category_id: query.categoryId } : {}),
+        ...(query.minRating ? { min_rating: query.minRating } : {}),
+        ...(query.searchTerm ? { search: query.searchTerm } : {}),
+      },
+    });
+    return response.data;
+  },
+  getMapSummary: async (query: MapSummaryQueryParams): Promise<MapSummaryResponse> => {
+    const response = await api.get<MapSummaryResponse>("/events/map/summary", {
+      params: {
+        ...(query.provinceIds && query.provinceIds.length > 0
+          ? { province_ids: query.provinceIds.join(",") }
+          : {}),
+        ...(query.categoryId ? { category_id: query.categoryId } : {}),
+        ...(query.minRating ? { min_rating: query.minRating } : {}),
+        ...(query.searchTerm ? { search: query.searchTerm } : {}),
+      },
+    });
+    return response.data;
   },
 };
