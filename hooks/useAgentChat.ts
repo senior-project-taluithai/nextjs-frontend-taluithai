@@ -18,34 +18,6 @@ export interface ToolCall {
   output?: unknown;
 }
 
-/**
- * Known graph node / tool names that should appear as progress indicators.
- * Matches the keys in TOOL_LABELS on the page.tsx side.
- * Internal LangGraph nodes (RunnableSequence, ChatOpenAI, ChannelRead, etc.) are excluded.
- */
-const KNOWN_PROGRESS_NODES = new Set([
-  // Pipeline nodes (outer graph)
-  "intentRouter",
-  "tripPipeline",
-  "hotelPipeline",
-  "recommendPipeline",
-  "routePipeline",
-  "eventPipeline",
-  "tripModifyPipeline",
-  "budgetModifyPipeline",
-  "supervisorFallback",
-  // Backend tools
-  "searchPlacesSemantic",
-  "searchPlacesByKeyword",
-  "searchEvents",
-  "findNearbyPlaces",
-  "calculateRoute",
-  "planRoute",
-  "generateItemizedBudget",
-  "searchHotels",
-  "webSearch",
-]);
-
 export interface PlannedTrip {
   name: string;
   description?: string;
@@ -230,6 +202,10 @@ interface UseAgentChatReturn {
 let messageCounter = 0;
 function genId() {
   return "msg-" + Date.now() + "-" + ++messageCounter;
+}
+
+function normalizeRunId(value: unknown): string {
+  return typeof value === "string" && value.trim().length > 0 ? value : "";
 }
 
 /**
@@ -455,7 +431,6 @@ export function useAgentChat(): UseAgentChatReturn {
             body: JSON.stringify({
               input: { messages: [newMessage] },
               assistant_id: "travel_agent",
-              stream_mode: ["values", "events"],
             }),
             signal: controller.signal,
           },
@@ -585,67 +560,89 @@ export function useAgentChat(): UseAgentChatReturn {
                   const isInsideTool = tags.some(
                     (t: string) => t === "graph:step:tools",
                   );
+                  if (isInsideTool) continue;
 
                   const chunk = data?.data?.chunk;
-                  // Only accumulate text content when NOT inside a tool node
                   const content = chunk?.content ?? chunk?.kwargs?.content;
-                  if (content && typeof content === "string" && !isInsideTool) {
-                    fullText += content;
-                  }
+                  const toolCallChunks =
+                    chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
 
-                  const toolCallChunks = chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
+                  let hasUiUpdate = false;
+
                   if (Array.isArray(toolCallChunks)) {
                     for (const tc of toolCallChunks) {
-                      if (tc.name) {
-                        const existing = toolCalls.find((t) => t.id === tc.id);
-                        if (!existing) {
-                          let parsedInput: Record<string, unknown> = {};
-                          if (typeof tc.args === "string") {
-                            try { parsedInput = JSON.parse(tc.args); } catch { /* ignore partial JSON */ }
-                          } else if (tc.args && typeof tc.args === "object") {
-                            parsedInput = tc.args;
-                          }
-                          toolCalls.push({
-                            id: tc.id || genId(),
-                            name: tc.name,
-                            state: "running",
-                            input: parsedInput,
-                          });
-                        }
+                      const toolName =
+                        typeof tc?.name === "string" ? tc.name : "";
+                      if (!toolName) continue;
+
+                      const runId = normalizeRunId(tc?.id);
+                      const existing = toolCalls.find(
+                        (t) =>
+                          (runId && t.id === runId) ||
+                          (t.name === toolName && t.state === "running"),
+                      );
+
+                      if (!existing) {
+                        toolCalls.push({
+                          id: runId || genId(),
+                          name: toolName,
+                          state: "running",
+                          input:
+                            tc && typeof tc.args === "object" && tc.args
+                              ? (tc.args as Record<string, unknown>)
+                              : {},
+                        });
+                        hasUiUpdate = true;
                       }
                     }
                   }
 
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? {
-                            ...m,
-                            content: fullText,
-                            toolCalls: [...toolCalls],
-                          }
-                        : m,
-                    ),
-                  );
+                  if (content && typeof content === "string") {
+                    fullText += content;
+                    hasUiUpdate = true;
+                  }
+
+                  if (hasUiUpdate) {
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
                 }
 
-                // Graph node started — only show known pipeline/tool nodes
+                // Graph node started
                 if (data.event === "on_chain_start") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
                   const nodeName = data.name as string;
-                  // Only show nodes that are in our known TOOL_LABELS map
-                  // This filters out internal LangGraph nodes like RunnableSequence, ChatOpenAI, ChannelRead, etc.
-                  if (nodeName && KNOWN_PROGRESS_NODES.has(nodeName)) {
+                  const runId = normalizeRunId(data?.run_id);
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
                     const existing = toolCalls.find(
-                      (t) => t.name === nodeName && t.state === "running",
+                      (t) =>
+                        (runId && t.id === runId) ||
+                        (t.name === nodeName && t.state === "running"),
                     );
                     if (!existing) {
-                      const tc: ToolCall = {
-                        id: data?.run_id || genId(),
+                      toolCalls.push({
+                        id: runId || genId(),
                         name: nodeName,
                         state: "running",
                         input: {},
-                      };
-                      toolCalls.push(tc);
+                      });
                       setMessages((prev) =>
                         prev.map((m) =>
                           m.id === assistantMsgId
@@ -661,12 +658,24 @@ export function useAgentChat(): UseAgentChatReturn {
                   }
                 }
 
-                // Graph node finished — only handle known pipeline/tool nodes
+                // Graph node finished
                 if (data.event === "on_chain_end") {
+                  const tags = Array.isArray(data.tags) ? data.tags : [];
+                  const isGraphStep = tags.some((t: string) =>
+                    t.startsWith("graph:step:"),
+                  );
                   const nodeName = data.name as string;
-                  if (nodeName && KNOWN_PROGRESS_NODES.has(nodeName)) {
+                  const runId = normalizeRunId(data?.run_id);
+                  if (
+                    isGraphStep &&
+                    nodeName &&
+                    !nodeName.startsWith("__") &&
+                    nodeName !== "LangGraph"
+                  ) {
                     const existing = toolCalls.find(
-                      (t) => t.name === nodeName && t.state === "running",
+                      (t) =>
+                        ((runId && t.id === runId) || t.name === nodeName) &&
+                        t.state === "running",
                     );
                     if (existing) {
                       existing.state = "completed";
@@ -689,25 +698,40 @@ export function useAgentChat(): UseAgentChatReturn {
                 // Tool events
                 if (data.event === "on_tool_start") {
                   const toolName = data?.name || "tool";
-                  const tc: ToolCall = {
-                    id: data?.run_id || genId(),
-                    name: toolName,
-                    state: "running",
-                    input: data?.data?.input?.kwargs || data?.data?.input || {},
-                  };
-                  toolCalls.push(tc);
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                        : m,
-                    ),
+                  const runId = normalizeRunId(data?.run_id);
+                  const existing = toolCalls.find(
+                    (t) =>
+                      (runId && t.id === runId) ||
+                      (t.name === toolName && t.state === "running"),
                   );
+                  if (!existing) {
+                    toolCalls.push({
+                      id: runId || genId(),
+                      name: toolName,
+                      state: "running",
+                      input:
+                        data?.data?.input?.kwargs || data?.data?.input || {},
+                    });
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMsgId
+                          ? {
+                              ...m,
+                              content: fullText,
+                              toolCalls: [...toolCalls],
+                            }
+                          : m,
+                      ),
+                    );
+                  }
                 }
                 if (data.event === "on_tool_end") {
                   const toolName = data?.name || "tool";
+                  const runId = normalizeRunId(data?.run_id);
                   const existing = toolCalls.find(
-                    (t) => t.name === toolName && t.state === "running",
+                    (t) =>
+                      ((runId && t.id === runId) || t.name === toolName) &&
+                      t.state === "running",
                   );
                   if (existing) {
                     existing.state = "completed";
