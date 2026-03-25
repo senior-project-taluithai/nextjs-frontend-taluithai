@@ -3,6 +3,58 @@ import { NextRequest } from "next/server";
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function isGraphStepEvent(event: Record<string, unknown>): boolean {
+  const tags = Array.isArray(event.tags) ? event.tags : [];
+  const hasGraphStepTag = tags.some(
+    (tag): tag is string =>
+      typeof tag === "string" && tag.startsWith("graph:step:"),
+  );
+  if (hasGraphStepTag) {
+    return true;
+  }
+
+  const metadata = asRecord(event.metadata);
+  if (!metadata) {
+    return false;
+  }
+
+  return (
+    typeof metadata.langgraph_node === "string" ||
+    typeof metadata.langgraph_step === "number" ||
+    typeof metadata.langgraph_step === "string"
+  );
+}
+
+function getGraphStepName(event: Record<string, unknown>): string {
+  const metadata = asRecord(event.metadata);
+  const metadataNode =
+    metadata && typeof metadata.langgraph_node === "string"
+      ? metadata.langgraph_node.trim()
+      : "";
+
+  if (metadataNode && !metadataNode.startsWith("__")) {
+    return metadataNode;
+  }
+
+  const fallbackName = typeof event.name === "string" ? event.name.trim() : "";
+  if (
+    fallbackName &&
+    !fallbackName.startsWith("__") &&
+    fallbackName !== "LangGraph"
+  ) {
+    return fallbackName;
+  }
+
+  return "";
+}
+
 /**
  * SSE translator: consumes the complex LangGraph SSE from the NestJS backend,
  * and re-emits typed SSE events to the frontend:
@@ -94,6 +146,7 @@ export async function POST(req: NextRequest) {
       try {
         const reader = streamRes.body!.getReader();
         let buffer = "";
+        let currentEventType = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -102,8 +155,6 @@ export async function POST(req: NextRequest) {
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
-
-          let currentEventType = "";
 
           for (const line of lines) {
             if (line.startsWith("event: ")) {
@@ -126,19 +177,16 @@ export async function POST(req: NextRequest) {
                   const isInsideTool = tags.some(
                     (t: string) => t === "graph:step:tools",
                   );
-                  if (isInsideTool) {
-                    // Skip text from inside sub-agent tool execution
-                    continue;
-                  }
                   const chunk = data?.data?.chunk;
                   // LangChain serializes as {lc:1, kwargs:{content:"..."}}
                   const content = chunk?.content ?? chunk?.kwargs?.content;
-                  if (content && typeof content === "string") {
+                  if (!isInsideTool && content && typeof content === "string") {
                     controller.enqueue(sse("text", { content }));
                   }
 
                   // Also check for tool calls within the model stream
-                  const toolCallChunks = chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
+                  const toolCallChunks =
+                    chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
                   if (Array.isArray(toolCallChunks)) {
                     for (const tc of toolCallChunks) {
                       if (tc.name) {
@@ -157,16 +205,13 @@ export async function POST(req: NextRequest) {
                 // Graph node started — use on_chain_start with graph:step tag
                 // to show which agent is working (supervisor, recommend_agent, etc.)
                 if (data.event === "on_chain_start") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
+                  const isGraphStep = isGraphStepEvent(
+                    data as Record<string, unknown>,
                   );
-                  const nodeName = data.name as string;
-                  if (
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
+                  const nodeName = getGraphStepName(
+                    data as Record<string, unknown>,
+                  );
+                  if (isGraphStep && nodeName) {
                     controller.enqueue(
                       sse("tool_start", {
                         name: nodeName,
@@ -179,16 +224,13 @@ export async function POST(req: NextRequest) {
 
                 // Graph node finished
                 if (data.event === "on_chain_end") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
+                  const isGraphStep = isGraphStepEvent(
+                    data as Record<string, unknown>,
                   );
-                  const nodeName = data.name as string;
-                  if (
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
+                  const nodeName = getGraphStepName(
+                    data as Record<string, unknown>,
+                  );
+                  if (isGraphStep && nodeName) {
                     controller.enqueue(
                       sse("tool_end", {
                         name: nodeName,
@@ -284,7 +326,10 @@ function extractMessages(
           return { role: "user", content: (kwargs?.content as string) || "" };
         }
         if (typeStr.includes("AIMessage")) {
-          return { role: "assistant", content: (kwargs?.content as string) || "" };
+          return {
+            role: "assistant",
+            content: (kwargs?.content as string) || "",
+          };
         }
       }
       return null;

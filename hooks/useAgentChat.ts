@@ -208,6 +208,60 @@ function normalizeRunId(value: unknown): string {
   return typeof value === "string" && value.trim().length > 0 ? value : "";
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function isGraphStepEvent(event: Record<string, unknown>): boolean {
+  const tags = Array.isArray(event.tags) ? event.tags : [];
+  const hasGraphStepTag = tags.some(
+    (tag): tag is string =>
+      typeof tag === "string" && tag.startsWith("graph:step:"),
+  );
+  if (hasGraphStepTag) {
+    return true;
+  }
+
+  const metadata = asRecord(event.metadata);
+  if (!metadata) {
+    return false;
+  }
+
+  return (
+    typeof metadata.langgraph_node === "string" ||
+    typeof metadata.langgraph_step === "number" ||
+    typeof metadata.langgraph_step === "string"
+  );
+}
+
+function getGraphStepName(event: Record<string, unknown>): string {
+  const metadata = asRecord(event.metadata);
+  const metadataNode =
+    metadata && typeof metadata.langgraph_node === "string"
+      ? metadata.langgraph_node.trim()
+      : "";
+
+  if (metadataNode && !metadataNode.startsWith("__")) {
+    return metadataNode;
+  }
+
+  const fallbackName = typeof event.name === "string" ? event.name.trim() : "";
+  if (
+    fallbackName &&
+    !fallbackName.startsWith("__") &&
+    fallbackName !== "LangGraph"
+  ) {
+    return fallbackName;
+  }
+
+  return "";
+}
+
+const MIN_RUNNING_STATE_MS = 450;
+
 /**
  * Parse an SSE stream. Calls handler for each (event, data) pair.
  */
@@ -333,6 +387,71 @@ export function useAgentChat(): UseAgentChatReturn {
 
       let fullText = "";
       const toolCalls: ToolCall[] = [];
+      const runningStartedAt = new Map<string, number>();
+      const pendingCompletions = new Map<
+        string,
+        {
+          timer: ReturnType<typeof setTimeout>;
+          apply: () => void;
+        }
+      >();
+
+      const updateAssistantMessage = (nextText = fullText) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: nextText,
+                  toolCalls: [...toolCalls],
+                }
+              : m,
+          ),
+        );
+      };
+
+      const clearPendingCompletion = (toolCallId: string) => {
+        const pending = pendingCompletions.get(toolCallId);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        pendingCompletions.delete(toolCallId);
+      };
+
+      const scheduleToolCompletion = (
+        toolCall: ToolCall,
+        output: unknown,
+      ): void => {
+        clearPendingCompletion(toolCall.id);
+
+        const startedAt = runningStartedAt.get(toolCall.id) ?? Date.now();
+        const elapsedMs = Date.now() - startedAt;
+        const remainingMs = Math.max(0, MIN_RUNNING_STATE_MS - elapsedMs);
+
+        const applyCompletion = () => {
+          clearPendingCompletion(toolCall.id);
+          toolCall.state = "completed";
+          toolCall.output = output;
+          runningStartedAt.delete(toolCall.id);
+          updateAssistantMessage();
+        };
+
+        if (remainingMs === 0) {
+          applyCompletion();
+          return;
+        }
+
+        const timer = setTimeout(applyCompletion, remainingMs);
+        pendingCompletions.set(toolCall.id, { timer, apply: applyCompletion });
+      };
+
+      const cancelPendingCompletions = (): void => {
+        const pending = Array.from(pendingCompletions.values());
+        pendingCompletions.clear();
+
+        for (const item of pending) {
+          clearTimeout(item.timer);
+        }
+      };
 
       try {
         // Pass existing data as context so the agent can modify rather than recreate
@@ -542,13 +661,7 @@ export function useAgentChat(): UseAgentChatReturn {
                     .trim();
                   if (cleanText) {
                     fullText = cleanText;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? { ...m, content: cleanText }
-                          : m,
-                      ),
-                    );
+                    updateAssistantMessage(cleanText);
                   }
                 }
               }
@@ -560,7 +673,6 @@ export function useAgentChat(): UseAgentChatReturn {
                   const isInsideTool = tags.some(
                     (t: string) => t === "graph:step:tools",
                   );
-                  if (isInsideTool) continue;
 
                   const chunk = data?.data?.chunk;
                   const content = chunk?.content ?? chunk?.kwargs?.content;
@@ -597,101 +709,65 @@ export function useAgentChat(): UseAgentChatReturn {
                     }
                   }
 
-                  if (content && typeof content === "string") {
+                  if (!isInsideTool && content && typeof content === "string") {
                     fullText += content;
                     hasUiUpdate = true;
                   }
 
                   if (hasUiUpdate) {
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
+                    updateAssistantMessage();
                   }
                 }
 
                 // Graph node started
                 if (data.event === "on_chain_start") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
+                  const isGraphStep = isGraphStepEvent(
+                    data as Record<string, unknown>,
                   );
-                  const nodeName = data.name as string;
+                  const nodeName = getGraphStepName(
+                    data as Record<string, unknown>,
+                  );
                   const runId = normalizeRunId(data?.run_id);
-                  if (
-                    isGraphStep &&
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
+                  if (isGraphStep && nodeName) {
                     const existing = toolCalls.find(
                       (t) =>
                         (runId && t.id === runId) ||
                         (t.name === nodeName && t.state === "running"),
                     );
                     if (!existing) {
-                      toolCalls.push({
+                      const toolCall: ToolCall = {
                         id: runId || genId(),
                         name: nodeName,
                         state: "running",
                         input: {},
-                      });
-                      setMessages((prev) =>
-                        prev.map((m) =>
-                          m.id === assistantMsgId
-                            ? {
-                                ...m,
-                                content: fullText,
-                                toolCalls: [...toolCalls],
-                              }
-                            : m,
-                        ),
-                      );
+                      };
+                      toolCalls.push(toolCall);
+                      clearPendingCompletion(toolCall.id);
+                      runningStartedAt.set(toolCall.id, Date.now());
+                      updateAssistantMessage();
                     }
                   }
                 }
 
                 // Graph node finished
                 if (data.event === "on_chain_end") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
+                  const isGraphStep = isGraphStepEvent(
+                    data as Record<string, unknown>,
                   );
-                  const nodeName = data.name as string;
+                  const nodeName = getGraphStepName(
+                    data as Record<string, unknown>,
+                  );
                   const runId = normalizeRunId(data?.run_id);
-                  if (
-                    isGraphStep &&
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
+                  if (isGraphStep && nodeName) {
                     const existing = toolCalls.find(
                       (t) =>
                         ((runId && t.id === runId) || t.name === nodeName) &&
                         t.state === "running",
                     );
                     if (existing) {
-                      existing.state = "completed";
-                      existing.output = null;
+                      scheduleToolCompletion(existing, null);
                     }
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
+                    updateAssistantMessage();
                   }
                 }
 
@@ -705,24 +781,17 @@ export function useAgentChat(): UseAgentChatReturn {
                       (t.name === toolName && t.state === "running"),
                   );
                   if (!existing) {
-                    toolCalls.push({
+                    const toolCall: ToolCall = {
                       id: runId || genId(),
                       name: toolName,
                       state: "running",
                       input:
                         data?.data?.input?.kwargs || data?.data?.input || {},
-                    });
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
+                    };
+                    toolCalls.push(toolCall);
+                    clearPendingCompletion(toolCall.id);
+                    runningStartedAt.set(toolCall.id, Date.now());
+                    updateAssistantMessage();
                   }
                 }
                 if (data.event === "on_tool_end") {
@@ -734,16 +803,12 @@ export function useAgentChat(): UseAgentChatReturn {
                       t.state === "running",
                   );
                   if (existing) {
-                    existing.state = "completed";
-                    existing.output = data?.data?.output || null;
+                    scheduleToolCompletion(
+                      existing,
+                      data?.data?.output || null,
+                    );
                   }
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                        : m,
-                    ),
-                  );
+                  updateAssistantMessage();
 
                   // Extract hotels from searchHotels tool output instantly
                   if (toolName === "searchHotels") {
@@ -796,6 +861,7 @@ export function useAgentChat(): UseAgentChatReturn {
           setRouteData(extractedRoute);
         }
       } catch (err) {
+        cancelPendingCompletions();
         if ((err as Error).name === "AbortError") {
           // User cancelled
         } else {
