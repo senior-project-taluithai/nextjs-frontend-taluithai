@@ -24,10 +24,12 @@ import {
   SlidersHorizontal,
   ChevronDown,
   MessageSquare,
+  Globe,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useExplorePlaces } from "@/hooks/api/usePlaces";
 import { useExploreEvents } from "@/hooks/api/useEvents";
+import { useProvinces } from "@/hooks/api/useProvinces";
 import { ExplorePlacesQuery } from "@/lib/dtos/place.dto";
 import { ExploreEventsQuery } from "@/lib/dtos/event.dto";
 
@@ -37,10 +39,24 @@ const ExploreMap = dynamic(() => import("@/components/explore/explore-map"), {
   loading: () => (
     <div className="w-full h-full min-h-[500px] bg-slate-100 dark:bg-slate-900 rounded-xl flex flex-col items-center justify-center text-muted-foreground gap-2">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      <p className="text-sm font-semibold">Loading Custom Map...</p>
+      <p className="text-sm font-semibold">Loading Map...</p>
     </div>
   ),
 });
+
+// Optimized map for full view - viewport-based fetching
+const ExploreMapOptimized = dynamic(
+  () => import("@/components/explore/explore-map-optimized"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[500px] bg-slate-100 dark:bg-slate-900 rounded-xl flex flex-col items-center justify-center text-muted-foreground gap-2">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-sm font-semibold">Loading Full Map...</p>
+      </div>
+    ),
+  }
+);
 
 type SortOption =
   | "recommended"
@@ -176,7 +192,7 @@ const HERO_PARTICLES = [
 ];
 
 export default function ExplorePage() {
-  const [viewMode, setViewMode] = useState<"grid" | "map" | "calendar">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "map" | "calendar" | "fullMap">("grid");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
@@ -309,6 +325,7 @@ export default function ExplorePage() {
     isLoading: isEventsLoading,
     isError: isEventsError,
   } = useExploreEvents(eventQuery);
+  const { data: provincesData } = useProvinces();
 
   // Derived Data
   const currentData = activeTab === "place" ? placesData : eventsData;
@@ -662,11 +679,17 @@ export default function ExplorePage() {
                     mode: "map" as const,
                     icon: <MapIcon className="w-4 h-4" />,
                   },
+                  {
+                    mode: "fullMap" as const,
+                    icon: <Globe className="w-4 h-4" />,
+                    title: "Full Map (all locations)",
+                  },
                 ].map((v) => (
                   <button
                     key={v.mode}
                     onClick={() => setViewMode(v.mode)}
                     className={`relative p-2.5 rounded-lg transition-all overflow-hidden ${viewMode === v.mode ? "text-white" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                    title={v.title}
                   >
                     {viewMode === v.mode && (
                       <motion.div
@@ -885,6 +908,25 @@ export default function ExplorePage() {
                   </motion.div>
                 )}
               </motion.div>
+            ) : viewMode === "fullMap" ? (
+              <motion.div
+                key="fullmap-view"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="h-[calc(100vh-14rem)] min-h-[500px] w-full rounded-2xl overflow-hidden shadow-lg border relative bg-slate-100 dark:bg-slate-800"
+              >
+                <ExploreMapOptimized
+                  provinces={provincesData || []}
+                  filters={{
+                    provinceIds: filters.provinceIds.length > 0 ? filters.provinceIds : undefined,
+                    categoryId: filters.categoryId,
+                    minRating: filters.minRating > 0 ? filters.minRating : undefined,
+                    searchTerm: debouncedSearch || undefined,
+                  }}
+                />
+              </motion.div>
             ) : (
               <motion.div
                 key="map-view"
@@ -894,7 +936,7 @@ export default function ExplorePage() {
                 transition={{ duration: 0.3 }}
                 className="h-[calc(100vh-14rem)] min-h-[500px] w-full rounded-2xl overflow-hidden shadow-lg border relative bg-slate-100 dark:bg-slate-800"
               >
-                <ExploreMap items={items} />
+                <ExploreMap items={items} provinces={provincesData || []} />
                 {/* Map Overlay Stats */}
                 <div className="absolute top-4 right-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg z-[500] border border-gray-100 dark:border-slate-800 flex items-center gap-2">
                   <motion.span
