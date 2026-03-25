@@ -16,6 +16,13 @@ export interface ToolCall {
   state: "running" | "completed" | "error";
   input?: Record<string, unknown>;
   output?: unknown;
+  progressMessage?: string;
+  progressStatus?:
+    | "started"
+    | "in_progress"
+    | "completed"
+    | "error"
+    | "skipped";
 }
 
 export interface PlannedTrip {
@@ -208,6 +215,108 @@ function normalizeRunId(value: unknown): string {
   return typeof value === "string" && value.trim().length > 0 ? value : "";
 }
 
+const MIN_RUNNING_STATE_MS = 450;
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function isInternalNodeName(name: string): boolean {
+  if (!name) return true;
+  return name.startsWith("__") || name === "LangGraph";
+}
+
+function getGraphStepName(event: Record<string, unknown>): string {
+  const metadata = asRecord(event.metadata);
+  const metadataNode =
+    metadata && typeof metadata.langgraph_node === "string"
+      ? metadata.langgraph_node.trim()
+      : "";
+  if (metadataNode && !isInternalNodeName(metadataNode)) {
+    return metadataNode;
+  }
+
+  const tags = Array.isArray(event.tags) ? event.tags : [];
+  for (const tag of tags) {
+    if (typeof tag !== "string") continue;
+    if (tag.startsWith("graph:step:")) {
+      const tagName = tag.slice("graph:step:".length).trim();
+      if (tagName && !isInternalNodeName(tagName)) {
+        return tagName;
+      }
+    }
+  }
+
+  const fallbackName = typeof event.name === "string" ? event.name.trim() : "";
+  if (fallbackName && !isInternalNodeName(fallbackName)) {
+    return fallbackName;
+  }
+
+  const data = asRecord(event.data);
+  const dataName =
+    data && typeof data.name === "string" ? data.name.trim() : "";
+  if (dataName && !isInternalNodeName(dataName)) {
+    return dataName;
+  }
+
+  return "";
+}
+
+function extractAssistantTextFromStateMessages(messages: unknown): string {
+  if (!Array.isArray(messages)) {
+    return "";
+  }
+
+  return messages
+    .map((message) => {
+      const msg = asRecord(message);
+      if (!msg) return "";
+
+      if (msg.role === "assistant" && typeof msg.content === "string") {
+        return msg.content;
+      }
+
+      if (msg.type === "ai" && typeof msg.content === "string") {
+        return msg.content;
+      }
+
+      if (msg.type === "constructor" && Array.isArray(msg.id)) {
+        const typeStr = msg.id.join(".");
+        const kwargs = asRecord(msg.kwargs);
+        if (
+          typeStr.includes("AIMessage") &&
+          kwargs &&
+          typeof kwargs.content === "string"
+        ) {
+          return kwargs.content;
+        }
+      }
+
+      return "";
+    })
+    .filter((text) => text.length > 0)
+    .join("\n\n");
+}
+
+function getClientAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("auth_token");
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return headers;
+}
 /**
  * Parse an SSE stream. Calls handler for each (event, data) pair.
  */
@@ -218,26 +327,68 @@ async function parseSSE(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  const processPart = (part: string): void => {
+    let eventType = "message";
+    const dataLines: string[] = [];
+
+    for (const rawLine of part.split(/\r?\n/)) {
+      const line = rawLine.trimEnd();
+      if (!line) continue;
+
+      if (line.startsWith(":")) {
+        continue;
+      }
+
+      if (line.startsWith("event: ")) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith("data: ")) {
+        dataLines.push(line.slice(6));
+      }
+    }
+
+    if (dataLines.length > 0) {
+      handler(eventType, dataLines.join("\n"));
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processPart(buffer);
+      }
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() || "";
 
-    for (const part of parts) {
-      let eventType = "message";
-      let dataStr = "";
-      for (const line of part.split("\n")) {
-        if (line.startsWith("event: ")) {
-          eventType = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
-          dataStr += line.slice(6);
-        }
+    while (true) {
+      const lfBoundary = buffer.indexOf("\n\n");
+      const crlfBoundary = buffer.indexOf("\r\n\r\n");
+
+      let boundaryIndex = -1;
+      let boundaryLength = 0;
+
+      if (
+        lfBoundary !== -1 &&
+        (crlfBoundary === -1 || lfBoundary < crlfBoundary)
+      ) {
+        boundaryIndex = lfBoundary;
+        boundaryLength = 2;
+      } else if (crlfBoundary !== -1) {
+        boundaryIndex = crlfBoundary;
+        boundaryLength = 4;
       }
-      if (dataStr) {
-        handler(eventType, dataStr);
+
+      if (boundaryIndex === -1) {
+        break;
+      }
+
+      const part = buffer.slice(0, boundaryIndex);
+      buffer = buffer.slice(boundaryIndex + boundaryLength);
+      if (part.trim()) {
+        processPart(part);
       }
     }
   }
@@ -265,9 +416,12 @@ export function useAgentChat(): UseAgentChatReturn {
   const fetchRoutePlanById = useCallback(
     async (planId: number): Promise<RouteData | null> => {
       try {
-        const BACKEND_URL =
-          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-        const res = await fetch(`${BACKEND_URL}/route-plans/${planId}`);
+        const res = await fetch(`/api/route-plans/${planId}`, {
+          method: "GET",
+          headers: getClientAuthHeaders(),
+          credentials: "include",
+          cache: "no-store",
+        });
         if (!res.ok) return null;
 
         const data: RoutePlanResponse = await res.json();
@@ -333,9 +487,73 @@ export function useAgentChat(): UseAgentChatReturn {
 
       let fullText = "";
       const toolCalls: ToolCall[] = [];
+      const runningStartedAt = new Map<string, number>();
+      const pendingCompletions = new Map<
+        string,
+        {
+          timer: ReturnType<typeof setTimeout>;
+          apply: () => void;
+        }
+      >();
+
+      const updateAssistantMessage = (nextText = fullText) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: nextText,
+                  toolCalls: [...toolCalls],
+                }
+              : m,
+          ),
+        );
+      };
+
+      const clearPendingCompletion = (toolCallId: string) => {
+        const pending = pendingCompletions.get(toolCallId);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        pendingCompletions.delete(toolCallId);
+      };
+
+      const scheduleToolCompletion = (
+        toolCall: ToolCall,
+        output: unknown,
+      ): void => {
+        clearPendingCompletion(toolCall.id);
+
+        const startedAt = runningStartedAt.get(toolCall.id) ?? Date.now();
+        const elapsedMs = Date.now() - startedAt;
+        const remainingMs = Math.max(0, MIN_RUNNING_STATE_MS - elapsedMs);
+
+        const applyCompletion = () => {
+          clearPendingCompletion(toolCall.id);
+          toolCall.state = "completed";
+          toolCall.output = output;
+          runningStartedAt.delete(toolCall.id);
+          updateAssistantMessage();
+        };
+
+        if (remainingMs === 0) {
+          applyCompletion();
+          return;
+        }
+
+        const timer = setTimeout(applyCompletion, remainingMs);
+        pendingCompletions.set(toolCall.id, { timer, apply: applyCompletion });
+      };
+
+      const cancelPendingCompletions = (): void => {
+        const pending = Array.from(pendingCompletions.values());
+        pendingCompletions.clear();
+
+        for (const item of pending) {
+          clearTimeout(item.timer);
+        }
+      };
 
       try {
-        // Pass existing data as context so the agent can modify rather than recreate
         let userContent = content.trim();
         const contextBlocks: string[] = [];
 
@@ -399,383 +617,466 @@ export function useAgentChat(): UseAgentChatReturn {
           userContent = `${contextBlocks.join("\n\n")}\n\n[USER_REQUEST]\n${content.trim()}`;
         }
 
-        // Only send the new message — the backend checkpointer handles history
         const newMessage = { role: "user" as const, content: userContent };
+        const formatFailedResponse = async (
+          response: Response,
+          stage: string,
+        ): Promise<string> => {
+          let rawBody = "";
+          try {
+            rawBody = await response.text();
+          } catch {
+            rawBody = "";
+          }
 
-        const BACKEND_URL =
-          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+          if (!rawBody) {
+            return `${stage} failed: ${response.status}`;
+          }
 
-        // 1. Create or reuse thread
+          try {
+            const parsed = JSON.parse(rawBody);
+            const parsedRecord = asRecord(parsed);
+            if (!parsedRecord) {
+              return `${stage} failed: ${response.status} | ${rawBody}`;
+            }
+
+            const message =
+              typeof parsedRecord.message === "string"
+                ? parsedRecord.message
+                : "";
+            const detail =
+              typeof parsedRecord.error === "string"
+                ? parsedRecord.error
+                : typeof parsedRecord.details === "string"
+                  ? parsedRecord.details
+                  : "";
+
+            const parts = [
+              message || `${stage} failed`,
+              `status=${response.status}`,
+              detail,
+            ].filter(Boolean);
+            return parts.join(" | ");
+          } catch {
+            return `${stage} failed: ${response.status} | ${rawBody}`;
+          }
+        };
+
         let currentThreadId = threadId;
         if (!currentThreadId) {
-          const threadRes = await fetch(`${BACKEND_URL}/agent/threads`, {
+          const createThreadRes = await fetch(`${BACKEND_URL}/agent/threads`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getClientAuthHeaders(),
             credentials: "include",
+            body: JSON.stringify({}),
+            signal: controller.signal,
           });
-          if (!threadRes.ok) {
-            throw new Error("Failed to create thread: " + threadRes.status);
+
+          if (!createThreadRes.ok) {
+            throw new Error(
+              await formatFailedResponse(createThreadRes, "Create thread"),
+            );
           }
-          const threadData = await threadRes.json();
-          currentThreadId = threadData.thread_id;
-          setThreadIdState(currentThreadId);
+
+          const threadPayload = await createThreadRes.json();
+          const threadPayloadRecord = asRecord(threadPayload);
+          const createdThreadId =
+            threadPayloadRecord &&
+            typeof threadPayloadRecord.thread_id === "string"
+              ? threadPayloadRecord.thread_id
+              : "";
+
+          if (!createdThreadId) {
+            throw new Error("Create thread failed: missing thread_id");
+          }
+
+          currentThreadId = createdThreadId;
+          setThreadIdState(createdThreadId);
         }
 
-        // 2. Stream response
-        const res = await fetch(
+        const streamRes = await fetch(
           `${BACKEND_URL}/agent/threads/${currentThreadId}/runs/stream`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              ...getClientAuthHeaders(),
+              Accept: "text/event-stream",
+            },
             credentials: "include",
             body: JSON.stringify({
-              input: { messages: [newMessage] },
+              input: {
+                messages: [{ role: "user", content: newMessage.content }],
+              },
               assistant_id: "travel_agent",
+              stream_mode: ["values", "events"],
             }),
             signal: controller.signal,
           },
         );
 
-        if (!res.ok || !res.body) {
-          throw new Error("Chat request failed: " + res.status);
+        if (!streamRes.ok) {
+          throw new Error(
+            await formatFailedResponse(streamRes, "Start stream"),
+          );
         }
 
-        // Parse SSE from backend (LangGraph raw events)
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let currentEventType = "";
+        if (!streamRes.body) {
+          throw new Error("Start stream failed: missing response body");
+        }
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        const handleToolStart = (
+          rawName: unknown,
+          rawInput: unknown,
+          rawRunId: unknown,
+        ): void => {
+          const toolName =
+            typeof rawName === "string" && rawName.trim() ? rawName : "tool";
+          const runId = normalizeRunId(rawRunId);
+          const existing = runId
+            ? toolCalls.find((t) => t.id === runId && t.state === "running")
+            : undefined;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+          if (existing) {
+            return;
+          }
 
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEventType = line.slice(7).trim();
-              continue;
-            }
+          const toolCall: ToolCall = {
+            id: runId || genId(),
+            name: toolName,
+            state: "running",
+            input:
+              rawInput && typeof rawInput === "object"
+                ? (rawInput as Record<string, unknown>)
+                : {},
+          };
+          toolCalls.push(toolCall);
+          clearPendingCompletion(toolCall.id);
+          runningStartedAt.set(toolCall.id, Date.now());
+          updateAssistantMessage();
+        };
 
-            if (!line.startsWith("data: ")) continue;
-            const dataStr = line.slice(6);
+        const handleToolEnd = (
+          rawName: unknown,
+          rawOutput: unknown,
+          rawRunId: unknown,
+        ): void => {
+          const toolName =
+            typeof rawName === "string" && rawName.trim() ? rawName : "tool";
+          const runId = normalizeRunId(rawRunId);
+          const existing = toolCalls.find(
+            (t) =>
+              ((runId && t.id === runId) || t.name === toolName) &&
+              t.state === "running",
+          );
 
-            try {
-              const data = JSON.parse(dataStr);
+          if (existing) {
+            scheduleToolCompletion(existing, rawOutput ?? null);
+          }
+          updateAssistantMessage();
 
-              // Process the final 'values' event — contains complete state from all agents
-              if (currentEventType === "values") {
-                // Prefer direct state properties from backend (reliable for modifications)
-                // Backend sends currentTrip, currentBudget, currentHotels in values event
-                const currentTrip = data.currentTrip as PlannedTrip | undefined;
-                const currentBudget = data.currentBudget as
-                  | BudgetData
-                  | undefined;
-                const currentHotelsRaw = data.currentHotels as unknown;
+          if (toolName === "searchHotels") {
+            const outputRecord = asRecord(rawOutput);
+            const outputContent =
+              (outputRecord?.kwargs as Record<string, unknown> | undefined)
+                ?.content ??
+              outputRecord?.content ??
+              rawOutput;
 
+            if (typeof outputContent === "string") {
+              try {
+                const parsed = JSON.parse(outputContent);
                 if (
-                  currentTrip &&
-                  Array.isArray(currentTrip.days) &&
-                  currentTrip.days.length > 0
+                  parsed &&
+                  typeof parsed === "object" &&
+                  Array.isArray((parsed as Record<string, unknown>).hotels) &&
+                  (parsed as Record<string, unknown>).hotels
                 ) {
-                  setTripData(currentTrip);
+                  setHotelData({
+                    hotels: (parsed as Record<string, unknown>)
+                      .hotels as HotelItem[],
+                  });
                 }
-                if (currentBudget && typeof currentBudget.total === "number") {
-                  setBudgetData(currentBudget);
-                }
-                if (
-                  currentHotelsRaw &&
-                  typeof currentHotelsRaw === "object" &&
-                  currentHotelsRaw !== null
-                ) {
-                  const hotelsObj = currentHotelsRaw as {
-                    hotels?: HotelItem[];
-                  };
-                  if (
-                    Array.isArray(hotelsObj.hotels) &&
-                    hotelsObj.hotels.length > 0
-                  ) {
-                    setHotelData({ hotels: hotelsObj.hotels });
-                  }
-                }
-
-                // Fallback: parse from AI message content (for initial trip creation)
-                // Only use this if backend didn't send direct state properties
-                const msgs = Array.isArray(data.messages) ? data.messages : [];
-                const allAiText = msgs
-                  .filter(
-                    (m: Record<string, unknown>) =>
-                      m.type === "ai" &&
-                      typeof m.content === "string" &&
-                      m.content,
-                  )
-                  .map((m: Record<string, unknown>) => m.content as string)
-                  .join("\n\n");
-
-                if (allAiText) {
-                  // Only parse from markdown if no direct state was provided
-                  if (!currentTrip || !currentTrip.days?.length) {
-                    const trip = extractTripFromMarkdown(allAiText);
-                    if (trip) setTripData(trip);
-                  }
-                  if (!currentBudget) {
-                    const budget = extractBudgetFromMarkdown(allAiText);
-                    if (budget) setBudgetData(budget);
-                  }
-                  if (
-                    !currentHotelsRaw ||
-                    typeof currentHotelsRaw !== "object"
-                  ) {
-                    const hotel = extractHotelFromMarkdown(allAiText);
-                    if (hotel) setHotelData(hotel);
-                  }
-                  const route = extractRouteFromMarkdown(allAiText);
-                  if (route) setRouteData(route);
-
-                  // Update chat message with clean text (strip JSON code blocks)
-                  const cleanText = allAiText
-                    .replace(/```(?:json)?\s*\n[\s\S]*?```/g, "")
-                    .replace(/\n{3,}/g, "\n\n")
-                    .trim();
-                  if (cleanText) {
-                    fullText = cleanText;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? { ...m, content: cleanText }
-                          : m,
-                      ),
-                    );
-                  }
-                }
+              } catch {
+                // Ignore non-JSON output
               }
-
-              if (currentEventType === "events") {
-                // Text chunks from the LLM
-                if (data.event === "on_chat_model_stream") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isInsideTool = tags.some(
-                    (t: string) => t === "graph:step:tools",
-                  );
-                  if (isInsideTool) continue;
-
-                  const chunk = data?.data?.chunk;
-                  const content = chunk?.content ?? chunk?.kwargs?.content;
-                  const toolCallChunks =
-                    chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
-
-                  let hasUiUpdate = false;
-
-                  if (Array.isArray(toolCallChunks)) {
-                    for (const tc of toolCallChunks) {
-                      const toolName =
-                        typeof tc?.name === "string" ? tc.name : "";
-                      if (!toolName) continue;
-
-                      const runId = normalizeRunId(tc?.id);
-                      const existing = toolCalls.find(
-                        (t) =>
-                          (runId && t.id === runId) ||
-                          (t.name === toolName && t.state === "running"),
-                      );
-
-                      if (!existing) {
-                        toolCalls.push({
-                          id: runId || genId(),
-                          name: toolName,
-                          state: "running",
-                          input:
-                            tc && typeof tc.args === "object" && tc.args
-                              ? (tc.args as Record<string, unknown>)
-                              : {},
-                        });
-                        hasUiUpdate = true;
-                      }
-                    }
-                  }
-
-                  if (content && typeof content === "string") {
-                    fullText += content;
-                    hasUiUpdate = true;
-                  }
-
-                  if (hasUiUpdate) {
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
-                  }
-                }
-
-                // Graph node started
-                if (data.event === "on_chain_start") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
-                  );
-                  const nodeName = data.name as string;
-                  const runId = normalizeRunId(data?.run_id);
-                  if (
-                    isGraphStep &&
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
-                    const existing = toolCalls.find(
-                      (t) =>
-                        (runId && t.id === runId) ||
-                        (t.name === nodeName && t.state === "running"),
-                    );
-                    if (!existing) {
-                      toolCalls.push({
-                        id: runId || genId(),
-                        name: nodeName,
-                        state: "running",
-                        input: {},
-                      });
-                      setMessages((prev) =>
-                        prev.map((m) =>
-                          m.id === assistantMsgId
-                            ? {
-                                ...m,
-                                content: fullText,
-                                toolCalls: [...toolCalls],
-                              }
-                            : m,
-                        ),
-                      );
-                    }
-                  }
-                }
-
-                // Graph node finished
-                if (data.event === "on_chain_end") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isGraphStep = tags.some((t: string) =>
-                    t.startsWith("graph:step:"),
-                  );
-                  const nodeName = data.name as string;
-                  const runId = normalizeRunId(data?.run_id);
-                  if (
-                    isGraphStep &&
-                    nodeName &&
-                    !nodeName.startsWith("__") &&
-                    nodeName !== "LangGraph"
-                  ) {
-                    const existing = toolCalls.find(
-                      (t) =>
-                        ((runId && t.id === runId) || t.name === nodeName) &&
-                        t.state === "running",
-                    );
-                    if (existing) {
-                      existing.state = "completed";
-                      existing.output = null;
-                    }
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
-                  }
-                }
-
-                // Tool events
-                if (data.event === "on_tool_start") {
-                  const toolName = data?.name || "tool";
-                  const runId = normalizeRunId(data?.run_id);
-                  const existing = toolCalls.find(
-                    (t) =>
-                      (runId && t.id === runId) ||
-                      (t.name === toolName && t.state === "running"),
-                  );
-                  if (!existing) {
-                    toolCalls.push({
-                      id: runId || genId(),
-                      name: toolName,
-                      state: "running",
-                      input:
-                        data?.data?.input?.kwargs || data?.data?.input || {},
-                    });
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
-                  }
-                }
-                if (data.event === "on_tool_end") {
-                  const toolName = data?.name || "tool";
-                  const runId = normalizeRunId(data?.run_id);
-                  const existing = toolCalls.find(
-                    (t) =>
-                      ((runId && t.id === runId) || t.name === toolName) &&
-                      t.state === "running",
-                  );
-                  if (existing) {
-                    existing.state = "completed";
-                    existing.output = data?.data?.output || null;
-                  }
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: fullText, toolCalls: [...toolCalls] }
-                        : m,
-                    ),
-                  );
-
-                  // Extract hotels from searchHotels tool output instantly
-                  if (toolName === "searchHotels") {
-                    const outputContent =
-                      data?.data?.output?.kwargs?.content ||
-                      data?.data?.output?.content ||
-                      data?.data?.output;
-                    if (typeof outputContent === "string") {
-                      try {
-                        const parsed = JSON.parse(outputContent);
-                        if (
-                          parsed &&
-                          typeof parsed === "object" &&
-                          Array.isArray(parsed.hotels) &&
-                          parsed.hotels.length > 0
-                        ) {
-                          setHotelData({ hotels: parsed.hotels });
-                        }
-                      } catch {
-                        // Not valid JSON, ignore
-                      }
-                    }
-                  }
-                }
-              }
-            } catch {
-              // Skip unparseable lines
             }
           }
-        }
+        };
 
-        // Try to extract trip/budget/hotel data from streamed text
+        const handleProgress = (
+          rawName: unknown,
+          rawRunId: unknown,
+          rawStatus: unknown,
+          rawMessage: unknown,
+        ): void => {
+          const toolName =
+            typeof rawName === "string" && rawName.trim() ? rawName : "tool";
+          const runId = normalizeRunId(rawRunId);
+          const status =
+            rawStatus === "started" ||
+            rawStatus === "in_progress" ||
+            rawStatus === "completed" ||
+            rawStatus === "error" ||
+            rawStatus === "skipped"
+              ? rawStatus
+              : "in_progress";
+          const progressMessage =
+            typeof rawMessage === "string" && rawMessage.trim().length > 0
+              ? rawMessage
+              : undefined;
+
+          let toolCall = runId
+            ? toolCalls.find((t) => t.id === runId)
+            : toolCalls.find(
+                (t) => t.name === toolName && t.state === "running",
+              );
+
+          if (!toolCall) {
+            toolCall = {
+              id: runId || genId(),
+              name: toolName,
+              state: status === "error" ? "error" : "running",
+              input: {},
+            };
+            toolCalls.push(toolCall);
+            runningStartedAt.set(toolCall.id, Date.now());
+          }
+
+          toolCall.progressStatus = status;
+          toolCall.progressMessage = progressMessage;
+
+          if (status === "error") {
+            clearPendingCompletion(toolCall.id);
+            toolCall.state = "error";
+            runningStartedAt.delete(toolCall.id);
+          } else if (status === "completed" || status === "skipped") {
+            scheduleToolCompletion(toolCall, toolCall.output ?? null);
+          }
+
+          updateAssistantMessage();
+        };
+
+        const reader = streamRes.body.getReader();
+        await parseSSE(reader, (eventType, dataStr) => {
+          try {
+            const data = JSON.parse(dataStr);
+
+            if (eventType === "events") {
+              const eventRecord = asRecord(data);
+              const backendEventName =
+                eventRecord && typeof eventRecord.event === "string"
+                  ? eventRecord.event
+                  : "";
+
+              if (backendEventName === "on_chat_model_stream") {
+                const tags = Array.isArray(eventRecord?.tags)
+                  ? eventRecord.tags
+                  : [];
+                const isInsideTool = tags.some(
+                  (t) => typeof t === "string" && t === "graph:step:tools",
+                );
+
+                const eventData = asRecord(eventRecord?.data);
+                const chunk = asRecord(eventData?.chunk);
+                const chunkKwargs = asRecord(chunk?.kwargs);
+                const content =
+                  typeof chunk?.content === "string"
+                    ? chunk.content
+                    : typeof chunkKwargs?.content === "string"
+                      ? chunkKwargs.content
+                      : "";
+
+                if (!isInsideTool && content) {
+                  fullText += content;
+                  updateAssistantMessage();
+                }
+
+                const rawToolCallChunks =
+                  chunk?.tool_call_chunks ?? chunkKwargs?.tool_call_chunks;
+                if (Array.isArray(rawToolCallChunks)) {
+                  for (const toolChunk of rawToolCallChunks) {
+                    const toolChunkRecord = asRecord(toolChunk);
+                    if (!toolChunkRecord?.name) continue;
+                    handleToolStart(
+                      toolChunkRecord.name,
+                      toolChunkRecord.args || {},
+                      toolChunkRecord.id || "",
+                    );
+                  }
+                }
+
+                return;
+              }
+
+              if (backendEventName === "on_chain_start") {
+                const nodeName =
+                  getGraphStepName(eventRecord as Record<string, unknown>) ||
+                  (typeof eventRecord?.name === "string"
+                    ? eventRecord.name
+                    : "");
+                if (nodeName) {
+                  handleToolStart(nodeName, {}, eventRecord?.run_id);
+                }
+                return;
+              }
+
+              if (backendEventName === "on_chain_end") {
+                const nodeName =
+                  getGraphStepName(eventRecord as Record<string, unknown>) ||
+                  (typeof eventRecord?.name === "string"
+                    ? eventRecord.name
+                    : "");
+                if (nodeName) {
+                  handleToolEnd(nodeName, null, eventRecord?.run_id);
+                }
+                return;
+              }
+
+              if (backendEventName === "on_tool_start") {
+                const eventData = asRecord(eventRecord?.data);
+                const inputWrapper = asRecord(eventData?.input);
+                handleToolStart(
+                  eventRecord?.name,
+                  (inputWrapper?.kwargs as
+                    | Record<string, unknown>
+                    | undefined) ||
+                    inputWrapper ||
+                    {},
+                  eventRecord?.run_id,
+                );
+                return;
+              }
+
+              if (backendEventName === "on_tool_end") {
+                const eventData = asRecord(eventRecord?.data);
+                handleToolEnd(
+                  eventRecord?.name,
+                  eventData?.output ?? null,
+                  eventRecord?.run_id,
+                );
+                return;
+              }
+            }
+
+            if (eventType === "values") {
+              const stateRecord = asRecord(data);
+              const allAiText = extractAssistantTextFromStateMessages(
+                stateRecord?.messages,
+              );
+
+              if (allAiText) {
+                const trip = extractTripFromMarkdown(allAiText);
+                if (trip) setTripData(trip);
+
+                const budget = extractBudgetFromMarkdown(allAiText);
+                if (budget) setBudgetData(budget);
+
+                const hotel = extractHotelFromMarkdown(allAiText);
+                if (hotel) setHotelData(hotel);
+
+                const route = extractRouteFromMarkdown(allAiText);
+                if (route) setRouteData(route);
+
+                const cleanText = allAiText
+                  .replace(/```(?:json)?\s*\n[\s\S]*?```/g, "")
+                  .replace(/\n{3,}/g, "\n\n")
+                  .trim();
+                if (cleanText) {
+                  fullText = cleanText;
+                  updateAssistantMessage(cleanText);
+                }
+              }
+              return;
+            }
+
+            if (eventType === "error") {
+              const errorRecord = asRecord(data);
+              const message =
+                typeof errorRecord?.message === "string"
+                  ? errorRecord.message
+                  : "Agent stream error";
+              throw new Error(message);
+            }
+
+            if (eventType === "text") {
+              const chunkText =
+                data && typeof data.content === "string" ? data.content : "";
+              if (chunkText) {
+                fullText += chunkText;
+                updateAssistantMessage();
+              }
+              return;
+            }
+
+            if (eventType === "tool_start") {
+              const payload = asRecord(data);
+              handleToolStart(payload?.name, payload?.input, payload?.runId);
+              return;
+            }
+
+            if (eventType === "tool_end") {
+              const payload = asRecord(data);
+              handleToolEnd(payload?.name, payload?.output, payload?.runId);
+              return;
+            }
+
+            if (eventType === "progress") {
+              const payload = asRecord(data);
+              handleProgress(
+                payload?.name,
+                payload?.runId,
+                payload?.status,
+                payload?.message,
+              );
+              return;
+            }
+
+            if (eventType === "meta") {
+              const nextThreadId =
+                data && typeof data.threadId === "string" ? data.threadId : "";
+              if (nextThreadId) {
+                setThreadIdState(nextThreadId);
+              }
+
+              const msgs = Array.isArray(data?.messages) ? data.messages : [];
+              const allAiText = msgs
+                .filter(
+                  (m: Record<string, unknown>) =>
+                    m.role === "assistant" &&
+                    typeof m.content === "string" &&
+                    m.content,
+                )
+                .map((m: Record<string, unknown>) => m.content as string)
+                .join("\n\n");
+
+              if (allAiText) {
+                const trip = extractTripFromMarkdown(allAiText);
+                if (trip) setTripData(trip);
+
+                const budget = extractBudgetFromMarkdown(allAiText);
+                if (budget) setBudgetData(budget);
+
+                const hotel = extractHotelFromMarkdown(allAiText);
+                if (hotel) setHotelData(hotel);
+
+                const route = extractRouteFromMarkdown(allAiText);
+                if (route) setRouteData(route);
+
+                const cleanText = allAiText
+                  .replace(/```(?:json)?\s*\n[\s\S]*?```/g, "")
+                  .replace(/\n{3,}/g, "\n\n")
+                  .trim();
+                if (cleanText) {
+                  fullText = cleanText;
+                  updateAssistantMessage(cleanText);
+                }
+              }
+            }
+          } catch {
+            // Skip unparseable event
+          }
+        });
+
         const extracted = extractTripFromMarkdown(fullText);
         if (extracted) {
           setTripData(extracted);
@@ -796,16 +1097,20 @@ export function useAgentChat(): UseAgentChatReturn {
           setRouteData(extractedRoute);
         }
       } catch (err) {
+        cancelPendingCompletions();
         if ((err as Error).name === "AbortError") {
           // User cancelled
         } else {
+          const errMessage =
+            err instanceof Error && err.message
+              ? err.message
+              : "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
                     ...m,
-                    content:
-                      m.content || "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+                    content: m.content || errMessage,
                   }
                 : m,
             ),
@@ -839,11 +1144,11 @@ export function useAgentChat(): UseAgentChatReturn {
       // Try to fetch persisted agent state first
       if (conversationId || loadedThreadId) {
         try {
-          const BACKEND_URL =
-            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
           const stateId = conversationId || loadedThreadId;
-          const stateRes = await fetch(`${BACKEND_URL}/chat/${stateId}/state`, {
+          const stateRes = await fetch(`/api/chat/${stateId}/state`, {
+            headers: getClientAuthHeaders(),
             credentials: "include",
+            cache: "no-store",
           });
 
           if (stateRes.ok) {

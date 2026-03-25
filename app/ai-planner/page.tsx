@@ -13,7 +13,15 @@ import { useSetDayHotel } from "@/hooks/api/useHotels";
 import { useChatConversation, useChatMessages } from "@/hooks/api/useChat";
 import { useProvinces } from "@/hooks/api/useProvinces";
 import { addDays, format } from "date-fns";
-import { MapPin, Bot, Sparkles, Map, X, History, GripVertical } from "lucide-react";
+import {
+  MapPin,
+  Bot,
+  Sparkles,
+  Map,
+  X,
+  History,
+  GripVertical,
+} from "lucide-react";
 
 import {
   useAgentChat,
@@ -30,6 +38,21 @@ import {
 } from "@/components/ai/tool";
 import { MessageResponse } from "@/components/ai/message";
 import { Loader } from "@/components/ai/loader";
+
+function getClientAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("auth_token");
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return headers;
+}
 
 function stripJsonBlocks(text: string): string {
   let cleaned = text.replace(/```(?:json)?\s*\n[\s\S]*?```/g, "");
@@ -195,6 +218,10 @@ const TOOL_LABELS: Record<string, string> = {
   budgetModifyPipeline: "Updating budget estimate",
   supervisorFallback: "Processing request",
   model_request: "AI generating response",
+  trip_planner: "Planning itinerary",
+  hotel_agent: "Finding hotels",
+  route_agent: "Planning route",
+  budget_agent: "Computing budget",
 
   // Backend Tools
   searchPlacesSemantic: "Searching for places",
@@ -211,11 +238,20 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
   const label = TOOL_LABELS[toolCall.name] || toolCall.name;
   const toolState =
     toolCall.state === "running" ? "input-available" : "output-available";
+  const progressText =
+    typeof toolCall.progressMessage === "string" && toolCall.progressMessage
+      ? toolCall.progressMessage
+      : null;
 
   return (
     <Tool>
       <ToolHeader title={label} type="tool-invocation" state={toolState} />
       <ToolContent>
+        {progressText ? (
+          <div className="text-[11px] text-muted-foreground pb-1">
+            {progressText}
+          </div>
+        ) : null}
         {toolCall.input && Object.keys(toolCall.input).length > 0 && (
           <ToolInput input={toolCall.input} toolName={toolCall.name} />
         )}
@@ -283,19 +319,29 @@ export default function AIPlannerPage() {
   const [activeMobilePanel, setActiveMobilePanel] = useState<
     "trip" | "map" | "chat"
   >("chat");
-  const [focusedLocation, setFocusedLocation] = useState<{lat: number, lng: number, id?: string | number} | null>(null);
+  const [focusedLocation, setFocusedLocation] = useState<{
+    lat: number;
+    lng: number;
+    id?: string | number;
+  } | null>(null);
 
   const hotelAssignmentsRef = useRef(hotelAssignments);
   hotelAssignmentsRef.current = hotelAssignments;
 
-  const handleViewOnMap = (lat: number | string, lng: number | string, id?: string | number) => {
-    const numLat = typeof lat === 'string' ? parseFloat(lat) : lat;
-    const numLng = typeof lng === 'string' ? parseFloat(lng) : lng;
+  const handleViewOnMap = (
+    lat: number | string,
+    lng: number | string,
+    id?: string | number,
+  ) => {
+    const numLat = typeof lat === "string" ? parseFloat(lat) : lat;
+    const numLng = typeof lng === "string" ? parseFloat(lng) : lng;
     if (!isNaN(numLat) && !isNaN(numLng)) {
       setFocusedLocation({ lat: numLat, lng: numLng, id });
       setActiveMobilePanel("map");
     } else {
-      toast.error("Location coordinates are currently unavailable for this place.");
+      toast.error(
+        "Location coordinates are currently unavailable for this place.",
+      );
     }
   };
 
@@ -315,14 +361,14 @@ export default function AIPlannerPage() {
     } else if (!activeConversationId) {
       setIsNewChat(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messagesData, activeConversationId, activeConversation?.threadId]);
 
   useEffect(() => {
     if (activeConversation?.threadId && !isNewChat) {
       updateThreadId(activeConversation.threadId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversation?.threadId, isNewChat]);
 
   useEffect(() => {
@@ -400,11 +446,9 @@ export default function AIPlannerPage() {
 
       if (days.every((d) => d.places.length === 0)) return;
 
-      const BACKEND_URL =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-      fetch(`${BACKEND_URL}/route-planner/plan`, {
+      fetch("/api/route-planner/plan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getClientAuthHeaders(),
         credentials: "include",
         body: JSON.stringify({
           user_location: { latitude: 13.7563, longitude: 100.5018 },
@@ -431,7 +475,7 @@ export default function AIPlannerPage() {
         clearTimeout(routePlannerTimeoutRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData, hotelData]);
 
   useEffect(() => {
@@ -460,11 +504,9 @@ export default function AIPlannerPage() {
         }),
       );
 
-      const BACKEND_URL =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-      fetch(`${BACKEND_URL}/route-planner/plan/${routePlanId}/hotels`, {
+      fetch(`/api/route-planner/plan/${routePlanId}/hotels`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: getClientAuthHeaders(),
         credentials: "include",
         body: JSON.stringify({
           hotel_overrides: hotelOverrides,
@@ -484,7 +526,7 @@ export default function AIPlannerPage() {
         clearTimeout(hotelUpdateTimeoutRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelAssignments, routePlanId, hotelData]);
 
   useEffect(() => {
@@ -495,7 +537,7 @@ export default function AIPlannerPage() {
         }
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routePlanId, routeData]);
 
   const handleSubmit = () => {
@@ -594,7 +636,7 @@ export default function AIPlannerPage() {
           const hotel = hotelData.hotels[hotelIdx];
           if (!hotel?.id) continue;
 
-          const plannedDay = tripData?.days?.find(d => d.day === night);
+          const plannedDay = tripData?.days?.find((d) => d.day === night);
           const checkinTime = plannedDay?.checkinTime || "14:00";
           const checkoutTime = plannedDay?.checkoutTime || "12:00";
 
@@ -620,7 +662,9 @@ export default function AIPlannerPage() {
           );
 
           if (hotelStop && hotelStop.hotel_id) {
-            const plannedDay = tripData?.days?.find(d => d.day === dayItinerary.day);
+            const plannedDay = tripData?.days?.find(
+              (d) => d.day === dayItinerary.day,
+            );
             const checkinTime = plannedDay?.checkinTime || "14:00";
             const checkoutTime = plannedDay?.checkoutTime || "12:00";
 
@@ -675,8 +719,9 @@ export default function AIPlannerPage() {
     itemType?: "place" | "event" | "hotel";
   }[] = trip.days.flatMap((d) =>
     d.items
-      .filter((i): i is typeof i & { latitude: number; longitude: number } => 
-        i.latitude !== undefined && i.longitude !== undefined
+      .filter(
+        (i): i is typeof i & { latitude: number; longitude: number } =>
+          i.latitude !== undefined && i.longitude !== undefined,
       )
       .map((i, idx) => ({
         id: i.id || `place-${d.day}-${idx}-${i.name}`,
@@ -706,7 +751,8 @@ export default function AIPlannerPage() {
     bookingUrl?: string;
     address?: string;
     itemType: "hotel";
-  }[] = hotelData?.hotels?.map((h, idx) => ({
+  }[] =
+    hotelData?.hotels?.map((h, idx) => ({
       id: `hotel-${idx}-${h.name}`,
       name: h.name,
       category: "hotel",
@@ -874,9 +920,7 @@ export default function AIPlannerPage() {
                                 !cleanText && !msg.toolCalls?.length ? (
                                   <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader size={14} />
-                                    <span className="text-xs">
-                                      Thinking...
-                                    </span>
+                                    <span className="text-xs">Thinking...</span>
                                   </div>
                                 ) : msg.toolCalls?.length ? (
                                   <div className="flex items-center gap-2 text-muted-foreground mt-2">
@@ -918,7 +962,10 @@ export default function AIPlannerPage() {
                                         )
                                       ) : null}
                                       {trip.days.length > 0 && isLatest && (
-                                        <TripDayCards days={trip.days} onViewOnMap={handleViewOnMap} />
+                                        <TripDayCards
+                                          days={trip.days}
+                                          onViewOnMap={handleViewOnMap}
+                                        />
                                       )}
                                     </>
                                   );
@@ -1033,57 +1080,65 @@ export default function AIPlannerPage() {
     <div className="flex-1 flex overflow-hidden bg-[#f8f9fa] h-screen">
       {/* Desktop: Resizable Panels */}
       <div className="hidden lg:flex flex-1 h-full w-full">
-        <Group id="desktop-planner-group" orientation="horizontal" className="w-full h-full">
-        {/* Trip Result Panel (left) */}
-        <Panel defaultSize="20%" minSize="15%" maxSize="35%">
-          <div className="h-full bg-white border-r border-gray-100 shadow-sm">
-            <TripResultPanel
-              tripName={trip.name}
-              days={trip.days}
-              budget={trip.budget}
-              budgetData={budgetData}
-              hotelData={hotelData}
-              routeData={routeData}
-              selectedHotelIndexes={selectedHotelIndexes}
-              onSelectHotel={onSelectHotel}
-              hotelAssignments={hotelAssignments}
-              onAssignHotel={onAssignHotel}
-              onOptimizeHotels={optimizeHotelAssignments}
-              onConfirm={handleConfirmTrip}
-              isConfirming={isConfirming}
-              onViewOnMap={handleViewOnMap}
-            />
-          </div>
-        </Panel>
-
-        <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
-          <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
-            <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
-          </div>
-        </Separator>
-
-        {/* Center Map Area */}
-        <Panel>
-          <div className="h-full relative overflow-hidden bg-muted/10">
-            <div className="absolute inset-0">
-              <BackgroundMap items={mapItems} routeGeometries={routeGeometries} focusedLocation={focusedLocation} />
+        <Group
+          id="desktop-planner-group"
+          orientation="horizontal"
+          className="w-full h-full"
+        >
+          {/* Trip Result Panel (left) */}
+          <Panel defaultSize="20%" minSize="15%" maxSize="35%">
+            <div className="h-full bg-white border-r border-gray-100 shadow-sm">
+              <TripResultPanel
+                tripName={trip.name}
+                days={trip.days}
+                budget={trip.budget}
+                budgetData={budgetData}
+                hotelData={hotelData}
+                routeData={routeData}
+                selectedHotelIndexes={selectedHotelIndexes}
+                onSelectHotel={onSelectHotel}
+                hotelAssignments={hotelAssignments}
+                onAssignHotel={onAssignHotel}
+                onOptimizeHotels={optimizeHotelAssignments}
+                onConfirm={handleConfirmTrip}
+                isConfirming={isConfirming}
+                onViewOnMap={handleViewOnMap}
+              />
             </div>
-            <RouteLegend days={uniqueDays} />
-          </div>
-        </Panel>
+          </Panel>
 
-        <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
-          <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
-            <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
-          </div>
-        </Separator>
+          <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
+            <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
+              <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
+            </div>
+          </Separator>
 
-        {/* Chat Panel (right) */}
-        <Panel defaultSize="25%" minSize="20%" maxSize="40%">
-          <div className="h-full flex flex-col bg-white border-l border-gray-100 shadow-sm overflow-hidden">
-            <ChatPanelContent />
-          </div>
-        </Panel>
+          {/* Center Map Area */}
+          <Panel>
+            <div className="h-full relative overflow-hidden bg-muted/10">
+              <div className="absolute inset-0">
+                <BackgroundMap
+                  items={mapItems}
+                  routeGeometries={routeGeometries}
+                  focusedLocation={focusedLocation}
+                />
+              </div>
+              <RouteLegend days={uniqueDays} />
+            </div>
+          </Panel>
+
+          <Separator className="w-1.5 bg-gray-100 hover:bg-emerald-400 focus:bg-emerald-400 transition-colors cursor-col-resize flex flex-col justify-center items-center group relative z-10">
+            <div className="z-20 flex h-6 w-3 items-center justify-center rounded-sm border border-gray-200 bg-white shadow-sm group-hover:border-emerald-500">
+              <GripVertical className="h-2.5 w-2.5 text-gray-400 group-hover:text-emerald-500" />
+            </div>
+          </Separator>
+
+          {/* Chat Panel (right) */}
+          <Panel defaultSize="25%" minSize="20%" maxSize="40%">
+            <div className="h-full flex flex-col bg-white border-l border-gray-100 shadow-sm overflow-hidden">
+              <ChatPanelContent />
+            </div>
+          </Panel>
         </Group>
       </div>
 
@@ -1124,7 +1179,11 @@ export default function AIPlannerPage() {
         {activeMobilePanel === "map" && (
           <div className="flex-1 relative overflow-hidden bg-muted/10">
             <div className="absolute inset-0">
-              <BackgroundMap items={mapItems} routeGeometries={routeGeometries} focusedLocation={focusedLocation} />
+              <BackgroundMap
+                items={mapItems}
+                routeGeometries={routeGeometries}
+                focusedLocation={focusedLocation}
+              />
             </div>
             <RouteLegend days={uniqueDays} />
           </div>

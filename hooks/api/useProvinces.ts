@@ -6,6 +6,7 @@ export const useProvinces = () => {
   return useQuery({
     queryKey: ["provinces"],
     queryFn: () => provinceService.getAll(),
+    staleTime: 60 * 60 * 1000,
   });
 };
 
