@@ -427,6 +427,7 @@ export function useAgentChat(): UseAgentChatReturn {
             body: JSON.stringify({
               input: { messages: [newMessage] },
               assistant_id: "travel_agent",
+              stream_mode: ["values", "events"],
             }),
             signal: controller.signal,
           },
@@ -556,24 +557,48 @@ export function useAgentChat(): UseAgentChatReturn {
                   const isInsideTool = tags.some(
                     (t: string) => t === "graph:step:tools",
                   );
-                  if (isInsideTool) continue;
 
                   const chunk = data?.data?.chunk;
+                  // Only accumulate text content when NOT inside a tool node
                   const content = chunk?.content ?? chunk?.kwargs?.content;
-                  if (content && typeof content === "string") {
+                  if (content && typeof content === "string" && !isInsideTool) {
                     fullText += content;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? {
-                              ...m,
-                              content: fullText,
-                              toolCalls: [...toolCalls],
-                            }
-                          : m,
-                      ),
-                    );
                   }
+
+                  const toolCallChunks = chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
+                  if (Array.isArray(toolCallChunks)) {
+                    for (const tc of toolCallChunks) {
+                      if (tc.name) {
+                        const existing = toolCalls.find((t) => t.id === tc.id);
+                        if (!existing) {
+                          let parsedInput: Record<string, unknown> = {};
+                          if (typeof tc.args === "string") {
+                            try { parsedInput = JSON.parse(tc.args); } catch { /* ignore partial JSON */ }
+                          } else if (tc.args && typeof tc.args === "object") {
+                            parsedInput = tc.args;
+                          }
+                          toolCalls.push({
+                            id: tc.id || genId(),
+                            name: tc.name,
+                            state: "running",
+                            input: parsedInput,
+                          });
+                        }
+                      }
+                    }
+                  }
+
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? {
+                            ...m,
+                            content: fullText,
+                            toolCalls: [...toolCalls],
+                          }
+                        : m,
+                    ),
+                  );
                 }
 
                 // Graph node started
@@ -584,7 +609,6 @@ export function useAgentChat(): UseAgentChatReturn {
                   );
                   const nodeName = data.name as string;
                   if (
-                    isGraphStep &&
                     nodeName &&
                     !nodeName.startsWith("__") &&
                     nodeName !== "LangGraph"
@@ -618,7 +642,6 @@ export function useAgentChat(): UseAgentChatReturn {
                   );
                   const nodeName = data.name as string;
                   if (
-                    isGraphStep &&
                     nodeName &&
                     !nodeName.startsWith("__") &&
                     nodeName !== "LangGraph"

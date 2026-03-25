@@ -174,6 +174,7 @@ function TypewriterMessage({ text }: { text: string }) {
 }
 
 const TOOL_LABELS: Record<string, string> = {
+  // Existing labels
   recommend_places: "Searching for recommended places",
   plan_trip: "Planning your trip",
   estimate_budget: "Estimating budget",
@@ -182,6 +183,28 @@ const TOOL_LABELS: Record<string, string> = {
   webSearch: "Searching the web",
   agent: "Processing",
   tools: "Running tools",
+
+  // Core LangGraph Nodes
+  intentRouter: "Analyzing request",
+  tripPipeline: "Generating trip plan",
+  hotelPipeline: "Processing hotel search",
+  recommendPipeline: "Finding recommendations",
+  routePipeline: "Planning route logistics",
+  eventPipeline: "Processing event search",
+  tripModifyPipeline: "Updating trip plan",
+  budgetModifyPipeline: "Updating budget estimate",
+  supervisorFallback: "Processing request",
+  model_request: "AI generating response",
+
+  // Backend Tools
+  searchPlacesSemantic: "Searching for places",
+  searchPlacesByKeyword: "Searching for places (Keywords)",
+  searchEvents: "Searching for events & festivals",
+  findNearbyPlaces: "Finding nearby places",
+  calculateRoute: "Calculating travel distance",
+  planRoute: "Optimizing itinerary route",
+  generateItemizedBudget: "Generating budget breakdown",
+  searchHotels: "Searching for hotels",
 };
 
 function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
@@ -265,9 +288,9 @@ export default function AIPlannerPage() {
   const hotelAssignmentsRef = useRef(hotelAssignments);
   hotelAssignmentsRef.current = hotelAssignments;
 
-  const handleViewOnMap = (lat: any, lng: any, id?: string | number) => {
-    const numLat = parseFloat(lat);
-    const numLng = parseFloat(lng);
+  const handleViewOnMap = (lat: number | string, lng: number | string, id?: string | number) => {
+    const numLat = typeof lat === 'string' ? parseFloat(lat) : lat;
+    const numLng = typeof lng === 'string' ? parseFloat(lng) : lng;
     if (!isNaN(numLat) && !isNaN(numLng)) {
       setFocusedLocation({ lat: numLat, lng: numLng, id });
       setActiveMobilePanel("map");
