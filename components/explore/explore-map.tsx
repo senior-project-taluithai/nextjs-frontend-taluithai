@@ -288,83 +288,20 @@ function clusterByProvince(
       !isNaN(Number(item.longitude)),
   );
 
-  const CLUSTER_THRESHOLD = 10;
-
-  if (zoom >= CLUSTER_THRESHOLD) {
-    return {
-      provinceClusters: [],
-      individualItems: validItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        name_en: item.name_en || item.name,
-        type: "start_date" in item && item.start_date ? "event" : "place",
-        latitude: Number(item.latitude),
-        longitude: Number(item.longitude),
-        province_id: item.province_id,
-        thumbnail_url: item.thumbnail_url || null,
-        rating: "user_rating_count" in item && item.user_rating_count > 0 ? item.user_rating : item.rating || 0,
-      })),
-      showClusters: false,
-    };
-  }
-
-  const provinceMap = new Map<number, Province>();
-  provinces.forEach((p) => {
-    provinceMap.set(p.id, p);
-  });
-
-  const provinceGroups = new Map<number, { places: MapItem[]; events: MapItem[] }>();
-
-  validItems.forEach((item) => {
-    const provinceId = item.province_id;
-    if (!provinceId) return;
-
-    const mapItem: MapItem = {
+  return {
+    provinceClusters: [],
+    individualItems: validItems.map((item) => ({
       id: item.id,
       name: item.name,
       name_en: item.name_en || item.name,
       type: "start_date" in item && item.start_date ? "event" : "place",
       latitude: Number(item.latitude),
       longitude: Number(item.longitude),
-      province_id: provinceId,
+      province_id: item.province_id,
       thumbnail_url: item.thumbnail_url || null,
       rating: "user_rating_count" in item && item.user_rating_count > 0 ? item.user_rating : item.rating || 0,
-    };
-
-    if (!provinceGroups.has(provinceId)) {
-      provinceGroups.set(provinceId, { places: [], events: [] });
-    }
-
-    const group = provinceGroups.get(provinceId)!;
-    if (mapItem.type === "place") {
-      group.places.push(mapItem);
-    } else {
-      group.events.push(mapItem);
-    }
-  });
-
-  const provinceClusters: ProvinceCluster[] = [];
-
-  provinceGroups.forEach((group, provinceId) => {
-    const province = provinceMap.get(provinceId);
-    if (!province) return;
-
-    const totalCount = group.places.length + group.events.length;
-
-    provinceClusters.push({
-      province,
-      places: group.places,
-      events: group.events,
-      totalCount,
-    });
-  });
-
-  provinceClusters.sort((a, b) => b.totalCount - a.totalCount);
-
-  return {
-    provinceClusters,
-    individualItems: [],
-    showClusters: true,
+    })),
+    showClusters: false,
   };
 }
 
