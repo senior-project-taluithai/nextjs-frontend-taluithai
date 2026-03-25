@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
             : [],
         },
         assistant_id: "travel_agent",
+        stream_mode: ["values", "events"],
       }),
     },
   );
@@ -135,6 +136,22 @@ export async function POST(req: NextRequest) {
                   if (content && typeof content === "string") {
                     controller.enqueue(sse("text", { content }));
                   }
+
+                  // Also check for tool calls within the model stream
+                  const toolCallChunks = chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
+                  if (Array.isArray(toolCallChunks)) {
+                    for (const tc of toolCallChunks) {
+                      if (tc.name) {
+                        controller.enqueue(
+                          sse("tool_start", {
+                            name: tc.name,
+                            input: tc.args || {},
+                            runId: tc.id || "",
+                          }),
+                        );
+                      }
+                    }
+                  }
                 }
 
                 // Graph node started — use on_chain_start with graph:step tag
@@ -146,7 +163,6 @@ export async function POST(req: NextRequest) {
                   );
                   const nodeName = data.name as string;
                   if (
-                    isGraphStep &&
                     nodeName &&
                     !nodeName.startsWith("__") &&
                     nodeName !== "LangGraph"
@@ -169,7 +185,6 @@ export async function POST(req: NextRequest) {
                   );
                   const nodeName = data.name as string;
                   if (
-                    isGraphStep &&
                     nodeName &&
                     !nodeName.startsWith("__") &&
                     nodeName !== "LangGraph"
@@ -248,7 +263,7 @@ function extractMessages(
   if (!state || !Array.isArray(state.messages)) return [];
 
   return state.messages
-    .map((m: any) => {
+    .map((m: Record<string, unknown>) => {
       // Handle standard basic objects
       if (m.type === "human")
         return {
@@ -264,11 +279,12 @@ function extractMessages(
       // Handle serialized LangChain messages
       if (m.type === "constructor" && m.id && Array.isArray(m.id)) {
         const typeStr = m.id.join(".");
+        const kwargs = m.kwargs as Record<string, unknown> | undefined;
         if (typeStr.includes("HumanMessage")) {
-          return { role: "user", content: m.kwargs?.content || "" };
+          return { role: "user", content: (kwargs?.content as string) || "" };
         }
         if (typeStr.includes("AIMessage")) {
-          return { role: "assistant", content: m.kwargs?.content || "" };
+          return { role: "assistant", content: (kwargs?.content as string) || "" };
         }
       }
       return null;
