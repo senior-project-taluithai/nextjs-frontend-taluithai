@@ -1,14 +1,8 @@
-import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import "./globals.css"
-import { SidebarProvider } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { AuthProvider } from "@/components/providers/AuthProvider"
-import { RouteGuard } from "@/components/providers/RouteGuard"
-import { Toaster } from "@/components/ui/sonner"
-import QueryProvider from "@/components/providers/QueryProvider"
-import { MobileMenuButton } from "@/components/mobile-menu-button"
-
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import QueryProvider from "@/components/providers/QueryProvider";
+import { AppShell } from "@/components/providers/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,21 +30,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
-          <AuthProvider>
-            <RouteGuard>
-              <SidebarProvider>
-                <AppSidebar />
-                <MobileMenuButton />
-                <main className="w-full relative overflow-x-hidden">
-                  {children}
-                </main>
-                <Toaster position="top-right" />
-              </SidebarProvider>
-            </RouteGuard>
-          </AuthProvider>
+          <AppShell>{children}</AppShell>
         </QueryProvider>
       </body>
     </html>
   );
 }
-

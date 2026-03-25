@@ -13,6 +13,7 @@ export const useUpcomingEvents = () => {
   return useQuery({
     queryKey: ["events", "upcoming"],
     queryFn: () => eventService.getUpcoming(),
+    staleTime: 5 * 60 * 1000,
   });
 };
 
@@ -22,6 +23,8 @@ export const useExploreEvents = (
   return useQuery({
     queryKey: ["events", "explore", query],
     queryFn: () => eventService.explore(query),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -75,5 +78,6 @@ export const useTiktokVideos = (eventId: number) => {
     queryKey: ["events", eventId, "tiktok-videos"],
     queryFn: () => eventService.getTiktokVideos(eventId),
     enabled: !!eventId,
+    staleTime: 60 * 60 * 1000,
   });
 };

@@ -17,8 +17,8 @@ export const useUserPreferences = () => {
   return useQuery({
     queryKey: ["user-preferences"],
     queryFn: () => authService.getUserPreferences(),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -37,8 +37,8 @@ export const useRecommendationPreferences = () => {
   return useQuery({
     queryKey: ["recommendation-preferences"],
     queryFn: () => authService.getRecommendationPreferences(),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 

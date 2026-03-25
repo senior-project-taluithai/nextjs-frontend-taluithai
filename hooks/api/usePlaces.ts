@@ -23,8 +23,8 @@ export const useRecommendedPlaces = () => {
   return useQuery({
     queryKey: ["places", "recommended", user?.id ?? "guest"],
     queryFn: () => placeService.getRecommended(),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -32,6 +32,7 @@ export const usePopularPlaces = () => {
   return useQuery({
     queryKey: ["places", "popular"],
     queryFn: () => placeService.getPopular(),
+    staleTime: 5 * 60 * 1000,
   });
 };
 
@@ -39,6 +40,7 @@ export const useHiddenGems = () => {
   return useQuery({
     queryKey: ["places", "hidden-gems"],
     queryFn: () => placeService.getHiddenGems(),
+    staleTime: 5 * 60 * 1000,
   });
 };
 
@@ -55,6 +57,8 @@ export const useExplorePlaces = (
   return useQuery({
     queryKey: ["places", "explore", query],
     queryFn: () => placeService.explore(query),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 

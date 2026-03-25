@@ -1,7 +1,55 @@
 import { NextRequest } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000";
+
+function jsonResponse(payload: unknown, status: number): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function getAuthToken(req: NextRequest): string {
+  const authCookie = req.cookies.get("Authentication")?.value || "";
+  const authHeader = req.headers.get("Authorization");
+  return authHeader?.replace("Bearer ", "") || authCookie;
+}
+
+async function toUpstreamErrorResponse(
+  stage: string,
+  upstreamRes: Response,
+): Promise<Response> {
+  const rawBody = await upstreamRes.text();
+
+  let parsedBody: unknown = null;
+  if (rawBody) {
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      parsedBody = rawBody;
+    }
+  }
+
+  return jsonResponse(
+    {
+      message: `${stage} failed`,
+      stage,
+      upstreamStatus: upstreamRes.status,
+      upstreamBody: parsedBody,
+    },
+    upstreamRes.status,
+  );
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -10,25 +58,18 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function isGraphStepEvent(event: Record<string, unknown>): boolean {
-  const tags = Array.isArray(event.tags) ? event.tags : [];
-  const hasGraphStepTag = tags.some(
-    (tag): tag is string =>
-      typeof tag === "string" && tag.startsWith("graph:step:"),
-  );
-  if (hasGraphStepTag) {
+function isInternalNodeName(name: string): boolean {
+  if (!name) {
     return true;
   }
 
-  const metadata = asRecord(event.metadata);
-  if (!metadata) {
-    return false;
-  }
+  const lower = name.toLowerCase();
 
   return (
-    typeof metadata.langgraph_node === "string" ||
-    typeof metadata.langgraph_step === "number" ||
-    typeof metadata.langgraph_step === "string"
+    name.startsWith("__") ||
+    name === "LangGraph" ||
+    name.startsWith("Runnable") ||
+    lower === "tools"
   );
 }
 
@@ -39,17 +80,34 @@ function getGraphStepName(event: Record<string, unknown>): string {
       ? metadata.langgraph_node.trim()
       : "";
 
-  if (metadataNode && !metadataNode.startsWith("__")) {
+  if (metadataNode && !isInternalNodeName(metadataNode)) {
     return metadataNode;
   }
 
+  const tags = Array.isArray(event.tags) ? event.tags : [];
+  for (const tag of tags) {
+    if (typeof tag !== "string") {
+      continue;
+    }
+
+    if (tag.startsWith("graph:step:")) {
+      const tagName = tag.slice("graph:step:".length).trim();
+      if (tagName && !isInternalNodeName(tagName)) {
+        return tagName;
+      }
+    }
+  }
+
   const fallbackName = typeof event.name === "string" ? event.name.trim() : "";
-  if (
-    fallbackName &&
-    !fallbackName.startsWith("__") &&
-    fallbackName !== "LangGraph"
-  ) {
+  if (fallbackName && !isInternalNodeName(fallbackName)) {
     return fallbackName;
+  }
+
+  const data = asRecord(event.data);
+  const dataName =
+    data && typeof data.name === "string" ? data.name.trim() : "";
+  if (dataName && !isInternalNodeName(dataName)) {
+    return dataName;
   }
 
   return "";
@@ -69,23 +127,28 @@ function getGraphStepName(event: Record<string, unknown>): string {
  * Request headers: Authorization: Bearer <token>
  */
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ message: "Invalid JSON request body" }, 400);
+  }
+
   const { messages, threadId: existingThreadId } = body as {
     messages: { role: string; content: string }[];
     threadId?: string;
   };
 
-  const cookies = req.cookies;
-  const authCookie = cookies.get("Authentication")?.value || "";
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "") || authCookie;
+  const token = getAuthToken(req);
+  if (!token) {
+    return jsonResponse({ message: "Unauthorized: please log in first" }, 401);
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    Authorization: `Bearer ${token}`,
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   // 1. Create or reuse thread
   let threadId = existingThreadId;
@@ -96,12 +159,42 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({}),
     });
     if (!threadRes.ok) {
-      return new Response(`Failed to create thread: ${threadRes.status}`, {
-        status: 500,
-      });
+      return toUpstreamErrorResponse("thread_create", threadRes);
     }
-    const threadData = await threadRes.json();
-    threadId = threadData.thread_id;
+
+    let threadData: unknown;
+    try {
+      threadData = await threadRes.json();
+    } catch {
+      return jsonResponse(
+        {
+          message: "thread_create failed",
+          stage: "thread_create",
+          upstreamStatus: 502,
+          upstreamBody: "Invalid thread response body",
+        },
+        502,
+      );
+    }
+
+    const parsedThreadData = asRecord(threadData);
+    const createdThreadId =
+      parsedThreadData && typeof parsedThreadData.thread_id === "string"
+        ? parsedThreadData.thread_id
+        : "";
+    if (!createdThreadId) {
+      return jsonResponse(
+        {
+          message: "thread_create failed",
+          stage: "thread_create",
+          upstreamStatus: 502,
+          upstreamBody: "Missing thread_id in response",
+        },
+        502,
+      );
+    }
+
+    threadId = createdThreadId;
   }
 
   // 2. Start streaming run — send only the latest user message
@@ -125,10 +218,20 @@ export async function POST(req: NextRequest) {
     },
   );
 
-  if (!streamRes.ok || !streamRes.body) {
-    return new Response(`Backend stream failed: ${streamRes.status}`, {
-      status: 502,
-    });
+  if (!streamRes.ok) {
+    return toUpstreamErrorResponse("stream_start", streamRes);
+  }
+
+  if (!streamRes.body) {
+    return jsonResponse(
+      {
+        message: "stream_start failed",
+        stage: "stream_start",
+        upstreamStatus: 502,
+        upstreamBody: "Missing stream body",
+      },
+      502,
+    );
   }
 
   // 3. Parse backend SSE and re-emit typed events
@@ -146,94 +249,144 @@ export async function POST(req: NextRequest) {
       try {
         const reader = streamRes.body!.getReader();
         let buffer = "";
-        let currentEventType = "";
+        controller.enqueue(sse("meta", { threadId }));
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        if (req.signal.aborted) {
+          reader.cancel();
+          controller.close();
+          return;
+        }
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+        const onAbort = () => {
+          void reader.cancel();
+          if (!streamRes.bodyUsed) {
+            controller.close();
+          }
+        };
+        req.signal.addEventListener("abort", onAbort, { once: true });
 
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEventType = line.slice(7).trim();
-              continue;
-            }
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            if (!line.startsWith("data: ")) continue;
-            const dataStr = line.slice(6);
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop() || "";
 
-            try {
-              const data = JSON.parse(dataStr);
+            for (const part of parts) {
+              let currentEventType = "";
+              let dataStr = "";
 
-              if (currentEventType === "events") {
-                // Text chunks from the LLM — only forward from supervisor agent node
-                // Events from inside sub-agent tools have "graph:step:tools" tag
-                // and produce garbled interleaved text when tools run in parallel
-                if (data.event === "on_chat_model_stream") {
-                  const tags = Array.isArray(data.tags) ? data.tags : [];
-                  const isInsideTool = tags.some(
-                    (t: string) => t === "graph:step:tools",
-                  );
-                  const chunk = data?.data?.chunk;
-                  // LangChain serializes as {lc:1, kwargs:{content:"..."}}
-                  const content = chunk?.content ?? chunk?.kwargs?.content;
-                  if (!isInsideTool && content && typeof content === "string") {
-                    controller.enqueue(sse("text", { content }));
-                  }
+              for (const rawLine of part.split("\n")) {
+                const line = rawLine.trimEnd();
+                if (!line) continue;
+                if (line.startsWith("event: ")) {
+                  currentEventType = line.slice(7).trim();
+                  continue;
+                }
 
-                  // Also check for tool calls within the model stream
-                  const toolCallChunks =
-                    chunk?.tool_call_chunks ?? chunk?.kwargs?.tool_call_chunks;
-                  if (Array.isArray(toolCallChunks)) {
-                    for (const tc of toolCallChunks) {
-                      if (tc.name) {
-                        controller.enqueue(
-                          sse("tool_start", {
-                            name: tc.name,
-                            input: tc.args || {},
-                            runId: tc.id || "",
-                          }),
-                        );
+                if (line.startsWith("data: ")) {
+                  dataStr += line.slice(6);
+                }
+              }
+
+              if (!dataStr) {
+                continue;
+              }
+
+              try {
+                const data = JSON.parse(dataStr);
+
+                if (currentEventType === "events") {
+                  // Text chunks from the LLM — only forward from supervisor agent node
+                  // Events from inside sub-agent tools have "graph:step:tools" tag
+                  // and produce garbled interleaved text when tools run in parallel
+                  if (data.event === "on_chat_model_stream") {
+                    const tags = Array.isArray(data.tags) ? data.tags : [];
+                    const isInsideTool = tags.some(
+                      (t: string) => t === "graph:step:tools",
+                    );
+                    const chunk = data?.data?.chunk;
+                    // LangChain serializes as {lc:1, kwargs:{content:"..."}}
+                    const content = chunk?.content ?? chunk?.kwargs?.content;
+                    if (
+                      !isInsideTool &&
+                      content &&
+                      typeof content === "string"
+                    ) {
+                      controller.enqueue(sse("text", { content }));
+                    }
+
+                    // Also check for tool calls within the model stream
+                    const toolCallChunks =
+                      chunk?.tool_call_chunks ??
+                      chunk?.kwargs?.tool_call_chunks;
+                    if (Array.isArray(toolCallChunks)) {
+                      for (const tc of toolCallChunks) {
+                        if (tc.name) {
+                          controller.enqueue(
+                            sse("tool_start", {
+                              name: tc.name,
+                              input: tc.args || {},
+                              runId: tc.id || "",
+                            }),
+                          );
+                        }
                       }
                     }
                   }
-                }
 
-                // Graph node started — use on_chain_start with graph:step tag
-                // to show which agent is working (supervisor, recommend_agent, etc.)
-                if (data.event === "on_chain_start") {
-                  const isGraphStep = isGraphStepEvent(
-                    data as Record<string, unknown>,
-                  );
-                  const nodeName = getGraphStepName(
-                    data as Record<string, unknown>,
-                  );
-                  if (isGraphStep && nodeName) {
+                  // Graph node started — use on_chain_start with graph:step tag
+                  // to show which agent is working (supervisor, recommend_agent, etc.)
+                  if (data.event === "on_chain_start") {
+                    const nodeName = getGraphStepName(
+                      data as Record<string, unknown>,
+                    );
+                    if (nodeName) {
+                      controller.enqueue(
+                        sse("tool_start", {
+                          name: nodeName,
+                          input: {},
+                          runId: data?.run_id || "",
+                        }),
+                      );
+                    }
+                  }
+
+                  // Graph node finished
+                  if (data.event === "on_chain_end") {
+                    const nodeName = getGraphStepName(
+                      data as Record<string, unknown>,
+                    );
+                    if (nodeName) {
+                      controller.enqueue(
+                        sse("tool_end", {
+                          name: nodeName,
+                          output: null,
+                          runId: data?.run_id || "",
+                        }),
+                      );
+                    }
+                  }
+
+                  // Also forward actual on_tool_start/end if they ever appear
+                  if (data.event === "on_tool_start") {
+                    const toolName = data?.name || "tool";
                     controller.enqueue(
                       sse("tool_start", {
-                        name: nodeName,
-                        input: {},
+                        name: toolName,
+                        input:
+                          data?.data?.input?.kwargs || data?.data?.input || {},
                         runId: data?.run_id || "",
                       }),
                     );
                   }
-                }
-
-                // Graph node finished
-                if (data.event === "on_chain_end") {
-                  const isGraphStep = isGraphStepEvent(
-                    data as Record<string, unknown>,
-                  );
-                  const nodeName = getGraphStepName(
-                    data as Record<string, unknown>,
-                  );
-                  if (isGraphStep && nodeName) {
+                  if (data.event === "on_tool_end") {
+                    const toolName = data?.name || "tool";
                     controller.enqueue(
                       sse("tool_end", {
-                        name: nodeName,
+                        name: toolName,
                         output: null,
                         runId: data?.run_id || "",
                       }),
@@ -241,37 +394,20 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
-                // Also forward actual on_tool_start/end if they ever appear
-                if (data.event === "on_tool_start") {
-                  const toolName = data?.name || "tool";
-                  controller.enqueue(
-                    sse("tool_start", {
-                      name: toolName,
-                      input:
-                        data?.data?.input?.kwargs || data?.data?.input || {},
-                      runId: data?.run_id || "",
-                    }),
-                  );
+                if (currentEventType === "error") {
+                  controller.enqueue(sse("error", data));
                 }
-                if (data.event === "on_tool_end") {
-                  const toolName = data?.name || "tool";
-                  controller.enqueue(
-                    sse("tool_end", {
-                      name: toolName,
-                      output: null,
-                      runId: data?.run_id || "",
-                    }),
-                  );
-                }
-              }
 
-              if (currentEventType === "values") {
-                valuesState = data;
+                if (currentEventType === "values") {
+                  valuesState = data;
+                }
+              } catch {
+                // Skip unparseable lines
               }
-            } catch {
-              // Skip unparseable lines
             }
           }
+        } finally {
+          req.signal.removeEventListener("abort", onAbort);
         }
 
         // Send metadata
@@ -292,8 +428,9 @@ export async function POST(req: NextRequest) {
   return new Response(readable, {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
