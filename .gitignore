@@ -51,3 +51,5 @@ CLAUDE.md
 
 .env*.local
 /revised-design
+
+GEMINI.md
