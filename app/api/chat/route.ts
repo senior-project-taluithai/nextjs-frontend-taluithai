@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+/Users/tar/Downloads/openrouter-icon-256x256.pngimport { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -401,6 +401,16 @@ export async function POST(req: NextRequest) {
                 if (currentEventType === "values") {
                   valuesState = data;
                 }
+
+                if (currentEventType === "tool_start") {
+                  controller.enqueue(sse("tool_start", data));
+                }
+                if (currentEventType === "tool_end") {
+                  controller.enqueue(sse("tool_end", data));
+                }
+                if (currentEventType === "progress") {
+                  controller.enqueue(sse("progress", data));
+                }
               } catch {
                 // Skip unparseable lines
               }
@@ -431,6 +441,7 @@ export async function POST(req: NextRequest) {
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      "Content-Encoding": "identity",
     },
   });
 }
